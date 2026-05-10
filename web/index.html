@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>StockChaser - AI链追涨看板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{--up:#d63031;--down:#00a86b;--warn:#f39c12;--bg:#0d1117;--bg2:#161b22;--bg3:#1f2630;--border:#30363d;--text:#e6edf3;--text2:#8b949e;--accent:#58a6ff;--buy:#3fb950}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:13px}
+header{background:linear-gradient(135deg,#1f2630,#0d1117);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:18px;font-weight:600}
+header h1 .sub{color:var(--text2);font-weight:400;font-size:12px;margin-left:8px}
+.meta{color:var(--text2);font-size:11px;text-align:right;line-height:1.5}
+.meta .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--down);margin-right:4px;vertical-align:middle;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.refresh-btn{background:var(--accent);color:#000;border:none;padding:5px 11px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;margin-left:8px}
+.refresh-btn:disabled{opacity:.4;cursor:wait}
+.mock-banner{background:var(--warn);color:#000;text-align:center;padding:4px;font-size:12px;font-weight:600}
+.controls{display:flex;gap:8px;padding:10px 20px;background:var(--bg2);border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center}
+.tab{background:var(--bg3);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px}
+.tab.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}
+.tab .count{color:var(--text2);margin-left:4px;font-size:11px}
+.tab.active .count{color:rgba(0,0,0,.6)}
+.search{margin-left:auto;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;width:180px;font-size:12px}
+.sort{background:var(--bg3);color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{background:var(--bg2);position:sticky;top:0;z-index:5}
+th{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text2);font-weight:500;font-size:11px;text-transform:uppercase;white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid #21262d;vertical-align:middle}
+tr.row:hover{background:var(--bg2);cursor:pointer}
+tr.row.expanded{background:var(--bg3)}
+tr.detail td{background:#0d1218;padding:14px 20px;border-bottom:2px solid var(--accent)}
+.ticker{font-weight:700;color:var(--accent);font-size:14px}
+.name{color:var(--text2);margin-left:6px;font-size:11px}
+.layer-tag{display:inline-block;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:600;background:#21262d;color:#c9d1d9;white-space:nowrap}
+.role-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600}
+.role-龙头{background:#1f6f3f;color:#d4f8d4}.role-二线{background:#735c12;color:#fff5cf}.role-概念{background:#6e2a2a;color:#ffd0d0}
+.num{font-variant-numeric:tabular-nums;text-align:right;font-weight:500}
+.up{color:var(--up)}.down{color:var(--down)}.stars{color:#ffcc00;letter-spacing:1px}
+.signals{display:flex;gap:4px;flex-wrap:wrap}
+.sig{background:var(--bg3);color:var(--text);padding:2px 6px;border-radius:3px;font-size:10.5px;border:1px solid var(--border)}
+.sig.buy{background:rgba(63,185,80,.15);border-color:var(--buy);color:var(--buy)}
+.sig.warn{background:rgba(243,156,18,.15);border-color:var(--warn);color:var(--warn)}
+.composite-bar{display:inline-block;width:50px;height:6px;background:var(--bg3);border-radius:3px;margin-left:6px;vertical-align:middle;overflow:hidden}
+.composite-bar>div{height:100%;background:linear-gradient(90deg,var(--up),#ff6b6b);border-radius:3px}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.detail-grid h4{color:var(--accent);font-size:12px;text-transform:uppercase;margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px}
+.detail-grid p{line-height:1.6;color:#c9d1d9;font-size:12px}
+.detail-grid .label{color:var(--text2);font-size:11px;text-transform:uppercase;margin-right:8px}
+.footer{text-align:center;color:var(--text2);font-size:11px;padding:18px 0;border-top:1px solid var(--border)}
+.view{display:none}.view.active{display:block}
+.backtest-wrap{padding:20px}
+.backtest-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:20px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px}
+.stat .label{color:var(--text2);font-size:11px;text-transform:uppercase}
+.stat .value{font-size:22px;font-weight:700;margin-top:4px}
+.chart-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:20px}
+.chart-wrap h3{font-size:13px;color:var(--text2);margin-bottom:12px}
+.empty-bt{padding:40px;text-align:center;color:var(--text2)}
+.empty-bt code{background:var(--bg3);padding:2px 6px;border-radius:3px}
+.view-tabs{display:flex;gap:4px;padding:6px 20px;background:#1a1f26;border-bottom:1px solid var(--border)}
+.view-tab{padding:6px 14px;background:transparent;color:var(--text2);border:none;cursor:pointer;font-size:12px;border-bottom:2px solid transparent}
+.view-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.status-tag{padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 StockChaser <span class="sub">AI链 · 追涨看板</span></h1>
+  <div class="meta" id="meta">
+    <div><span class="live-dot"></span><span id="last-updated">连接中...</span></div>
+    <div>SPY 4w: <span id="spy">-</span> &nbsp;<button class="refresh-btn" id="refresh-btn">刷新</button></div>
+  </div>
+</header>
+<div id="mock-banner" class="mock-banner" style="display:none">⚠️ MOCK 数据。生产用 <code>python serve.py</code></div>
+<div class="view-tabs">
+  <button class="view-tab active" data-view="dashboard">📊 实时看板</button>
+  <button class="view-tab" data-view="backtest">📈 策略回测</button>
+</div>
+<div class="view active" id="view-dashboard">
+  <div class="controls">
+    <button class="tab active" data-filter="all">🌐 全部 <span class="count" id="c-all">0</span></button>
+    <button class="tab" data-filter="ready" style="background:#1f6f3f;color:#d4f8d4;border-color:#3fb950">✅ 可入场 <span class="count" id="c-ready">0</span></button>
+    <button class="tab" data-filter="core">🎯 建仓核心池 <span class="count" id="c-core">0</span></button>
+    <button class="tab" data-filter="BREAKOUT">🚀 突破4周高 <span class="count" id="c-BREAKOUT">0</span></button>
+    <button class="tab" data-filter="STRONG_WEEK">📊 本周+3% <span class="count" id="c-STRONG_WEEK">0</span></button>
+    <button class="tab" data-filter="STRONG_DAY">📈 今日+3% <span class="count" id="c-STRONG_DAY">0</span></button>
+    <button class="tab" data-filter="TREND_PULLBACK">🎯 趋势回调 <span class="count" id="c-TREND_PULLBACK">0</span></button>
+    <button class="tab" data-filter="ACCEL">🚂 多周期同向 <span class="count" id="c-ACCEL">0</span></button>
+    <button class="tab" data-filter="RS_LEADER">💪 RS领涨 <span class="count" id="c-RS_LEADER">0</span></button>
+    <select class="sort" id="sort">
+      <option value="composite_score">按综合分</option>
+      <option value="momentum_score">按动量分</option>
+      <option value="week_return_pct">按周涨幅</option>
+      <option value="month_return_pct">按月涨幅</option>
+      <option value="rs_vs_spy_4w_pp">按RS vs SPY</option>
+    </select>
+    <input type="text" class="search" id="search" placeholder="搜索ticker/公司...">
+  </div>
+  <table>
+    <thead><tr>
+      <th>#</th><th>Ticker</th><th>层级</th><th>角色</th><th>★</th><th>状态</th>
+      <th class="num">价格</th><th class="num">日涨</th><th class="num">周涨</th>
+      <th class="num">月涨</th><th class="num">距4W高</th><th class="num">RS</th>
+      <th>信号</th><th class="num">综合分</th><th class="num">建议止损</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+<div class="view" id="view-backtest">
+  <div class="backtest-wrap" id="bt-content">
+    <div class="empty-bt"><p>回测数据未生成。请先运行：</p><p style="margin-top:8px"><code>python scripts/backtest.py</code></p></div>
+  </div>
+</div>
+<div class="footer">StockChaser · personal use · 三道闸门 + ATR 仓位</div>
+<script>
+let data=null,backtestData=null,chartInstance=null;
+let currentFilter="all",currentSort="composite_score",searchQuery="",expandedTicker=null;
+const isLocalServer=location.protocol.startsWith("http")&&location.host;
+const apiData=isLocalServer?"/api/data":"../data/signals.json";
+const apiBacktest=isLocalServer?"/api/backtest":"../data/backtest_results.json";
+const apiRefresh=isLocalServer?"/api/refresh":null;
+
+function fmtAgo(iso){if(!iso)return"-";const d=new Date(iso);const m=Math.floor((Date.now()-d.getTime())/60000);if(m<1)return"刚刚";if(m<60)return m+" 分钟前";const h=Math.floor(m/60);if(h<24)return h+" 小时前";return d.toLocaleString("zh-CN")}
+function fmt(v,sfx,d){d=d==null?2:d;if(v==null)return"-";const n=Number(v);return isNaN(n)?"-":n.toFixed(d)+(sfx||"")}
+function colorClass(v){if(v==null)return"";return v>0?"up":(v<0?"down":"")}
+function arrow(v){if(v==null)return"";return v>0?"▲ ":(v<0?"▼ ":"")}
+
+async function loadData(){
+  try{
+    const r=await fetch(apiData+"?_="+Date.now());
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    data=await r.json();
+    document.getElementById("last-updated").textContent="更新于 "+fmtAgo(data.generated_at);
+    const sp=data.spy_4w_return_pct,el=document.getElementById("spy");
+    if(sp!=null){el.textContent=(sp>=0?"+":"")+sp+"%";el.className=sp>=0?"up":"down"}
+    document.getElementById("mock-banner").style.display=data.is_mock?"block":"none";
+    updateCounts();render();
+  }catch(e){
+    document.getElementById("last-updated").textContent="加载失败: "+e.message;
+  }
+}
+
+function updateCounts(){
+  if(!data)return;
+  document.getElementById("c-all").textContent=data.rows.length;
+  document.getElementById("c-core").textContent=data.rows.filter(r=>r.potential===5&&r.strategy==="核心配置").length;
+  document.getElementById("c-ready").textContent=data.rows.filter(r=>r.overall_status==="READY").length;
+  ["BREAKOUT","STRONG_WEEK","STRONG_DAY","TREND_PULLBACK","ACCEL","RS_LEADER"].forEach(k=>{
+    document.getElementById("c-"+k).textContent=data.rows.filter(r=>r.signals.includes(k)).length;
+  });
+}
+
+function filterRows(){
+  let rows=data.rows.slice();
+  if(currentFilter==="core")rows=rows.filter(r=>r.potential===5&&r.strategy==="核心配置");
+  else if(currentFilter==="ready")rows=rows.filter(r=>r.overall_status==="READY");
+  else if(currentFilter!=="all")rows=rows.filter(r=>r.signals.includes(currentFilter));
+  if(searchQuery){
+    const q=searchQuery.toLowerCase();
+    rows=rows.filter(r=>r.ticker.toLowerCase().includes(q)||(r.name||"").toLowerCase().includes(q)||(r.layer||"").toLowerCase().includes(q));
+  }
+  rows.sort((a,b)=>(b[currentSort]??-999)-(a[currentSort]??-999));
+  return rows;
+}
+
+function renderRow(r,i){
+  const meta=data.signal_meta;
+  const sigs=r.signals.map(s=>'<span class="sig '+meta[s].buy_class+'">'+meta[s].emoji+" "+meta[s].label+"</span>").join("");
+  const stars="★".repeat(r.potential||0);
+  const compPct=Math.min(100,Math.max(0,r.composite_score));
+  const sm=(data.status_meta&&data.status_meta[r.overall_status])||{label:r.overall_status||"-",color:"#8b949e"};
+  return '<tr class="row '+(expandedTicker===r.ticker?"expanded":"")+'" data-ticker="'+r.ticker+'">'+
+    "<td>"+(i+1)+"</td>"+
+    '<td><span class="ticker">'+r.ticker+'</span><span class="name">'+(r.name||"")+"</span></td>"+
+    '<td><span class="layer-tag">'+(r.layer||"")+"</span></td>"+
+    '<td><span class="role-tag role-'+r.role+'">'+(r.role||"")+"</span></td>"+
+    '<td class="stars">'+stars+"</td>"+
+    '<td><span class="status-tag" style="background:'+sm.color+'22;color:'+sm.color+';border:1px solid '+sm.color+'">'+sm.label+"</span></td>"+
+    '<td class="num">$'+fmt(r.latest_price)+"</td>"+
+    '<td class="num '+colorClass(r.daily_return_pct)+'">'+arrow(r.daily_return_pct)+fmt(r.daily_return_pct,"%")+"</td>"+
+    '<td class="num '+colorClass(r.week_return_pct)+'">'+arrow(r.week_return_pct)+fmt(r.week_return_pct,"%")+"</td>"+
+    '<td class="num '+colorClass(r.month_return_pct)+'">'+arrow(r.month_return_pct)+fmt(r.month_return_pct,"%")+"</td>"+
+    '<td class="num '+(r.dist_4w_high_pct>-1?"up":"")+'">'+fmt(r.dist_4w_high_pct,"%")+"</td>"+
+    '<td class="num '+colorClass(r.rs_vs_spy_4w_pp)+'">'+arrow(r.rs_vs_spy_4w_pp)+fmt(r.rs_vs_spy_4w_pp,"pp",1)+"</td>"+
+    '<td><div class="signals">'+sigs+"</div></td>"+
+    '<td class="num"><strong>'+r.composite_score+'</strong><div class="composite-bar"><div style="width:'+compPct+'%"></div></div></td>'+
+    '<td class="num down">'+(r.suggested_stop_price?"$"+fmt(r.suggested_stop_price):"-")+"</td>"+
+    "</tr>";
+}
+
+function renderDetail(r){
+  const g=r.gates||{};
+  const chip=(ok,label)=>'<span style="background:'+(ok?"#1f6f3f":"#6e2a2a")+';color:'+(ok?"#d4f8d4":"#ffd0d0")+';padding:2px 8px;border-radius:3px;font-size:11px;margin-right:4px">'+(ok?"✓":"✗")+" "+label+"</span>";
+  return '<tr class="detail"><td colspan="15">'+
+    '<div class="detail-grid"><div>'+
+    "<h4>核心逻辑/催化剂</h4>"+
+    '<p><span class="label">逻辑</span>'+(r.logic||"-")+"</p>"+
+    '<p><span class="label">催化</span>'+(r.catalyst||"-")+"</p>"+
+    '<p><span class="label">中美互证</span>'+(r.cn_pair||"-")+"</p>"+
+    '<p><span class="label">风险</span>'+(r.risk||"-")+"</p>"+
+    '<p><span class="label">子赛道</span>'+(r.subsector||"-")+"</p>"+
+    '<p><span class="label">策略</span>'+(r.strategy||"-")+"</p>"+
+    "</div><div>"+
+    "<h4>价格 & 三道闸门</h4>"+
+    '<p><span class="label">最新价/止损/目标</span>$'+fmt(r.latest_price)+" → 止损 $"+fmt(r.suggested_stop_price)+" · 目标 $"+fmt(r.suggested_target_price)+"</p>"+
+    '<p><span class="label">建议仓位</span>'+(r.suggested_size_pct!=null?r.suggested_size_pct+"% (1% 风险预算)":"-")+"</p>"+
+    '<p><span class="label">ATR(20)</span>$'+fmt(r.atr_20)+" ("+fmt(r.atr_pct,"%")+" 日波动)</p>"+
+    '<p style="margin-top:8px"><span class="label">三道闸门</span>'+chip(g.g1_regime,"Regime")+" "+chip(g.g2_startup,"Startup")+" "+chip(g.g3_quality,"Quality")+"</p>"+
+    '<p style="font-size:11px;color:#8b949e">启动信号(2/3): '+chip(g.g2_breakout,"突破")+" "+chip(g.g2_week_3pct,"周+3%")+" "+chip(g.g2_vol_surge,"量能")+"</p>"+
+    '<p><span class="label">52W高/距高</span>$'+fmt(r.high_52w)+' · <span class="'+colorClass(r.dist_52w_high_pct)+'">'+fmt(r.dist_52w_high_pct,"%")+"</span></p>"+
+    '<p><span class="label">SMA20/50</span>$'+fmt(r.sma_20)+" / $"+fmt(r.sma_50)+(r.above_sma_20?" ✅":" ❌")+"</p>"+
+    '<p><span class="label">动量/基本面/综合</span>'+r.momentum_score+" / "+r.fundamental_score+" / <strong>"+r.composite_score+"</strong></p>"+
+    "</div></div></td></tr>";
+}
+
+function render(){
+  if(!data)return;
+  const rows=filterRows();
+  let html="";
+  rows.forEach((r,i)=>{html+=renderRow(r,i);if(expandedTicker===r.ticker)html+=renderDetail(r);});
+  document.getElementById("tbody").innerHTML=html;
+  document.querySelectorAll("tr.row").forEach(tr=>{
+    tr.addEventListener("click",()=>{
+      const t=tr.dataset.ticker;
+      expandedTicker=(expandedTicker===t)?null:t;
+      render();
+    });
+  });
+}
+
+document.querySelectorAll(".tab").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    currentFilter=b.dataset.filter;
+    expandedTicker=null;
+    render();
+  });
+});
+document.getElementById("sort").addEventListener("change",e=>{currentSort=e.target.value;render();});
+document.getElementById("search").addEventListener("input",e=>{searchQuery=e.target.value;render();});
+
+document.getElementById("refresh-btn").addEventListener("click",async()=>{
+  const btn=document.getElementById("refresh-btn");
+  btn.disabled=true;btn.textContent="抓取中...";
+  try{
+    if(apiRefresh){
+      const r=await fetch(apiRefresh,{method:"POST"});
+      if(r.ok)data=await r.json();else throw new Error(await r.text());
+      document.getElementById("last-updated").textContent="刚刚刷新";
+      updateCounts();render();
+    }else await loadData();
+  }catch(e){alert("刷新失败: "+e.message);}
+  btn.disabled=false;btn.textContent="刷新";
+});
+
+document.querySelectorAll(".view-tab").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll(".view-tab").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    document.getElementById("view-"+b.dataset.view).classList.add("active");
+    if(b.dataset.view==="backtest")loadBacktest();
+  });
+});
+
+async function loadBacktest(){
+  if(backtestData){renderBacktest();return;}
+  try{
+    const r=await fetch(apiBacktest+"?_="+Date.now());
+    if(!r.ok){document.getElementById("bt-content").innerHTML='<div class="empty-bt"><p>回测数据未生成</p><p style="margin-top:8px"><code>python scripts/backtest.py</code></p></div>';return;}
+    backtestData=await r.json();
+    renderBacktest();
+  }catch(e){document.getElementById("bt-content").innerHTML='<div class="empty-bt">加载失败: '+e.message+"</div>";}
+}
+
+function renderBacktest(){
+  const d=backtestData,stats=d.summary;
+  const fmtPct=v=>(v>=0?"+":"")+(v*100).toFixed(2)+"%";
+  const cls=v=>v>=0?"up":"down";
+  const stat=(label,val,c)=>'<div class="stat"><div class="label">'+label+'</div><div class="value '+(c||"")+'">'+val+"</div></div>";
+  let html='<div class="backtest-grid">'+
+    stat("★ 策略 总收益",fmtPct(stats.strategy_total_return),cls(stats.strategy_total_return))+
+    stat("SPY 总收益",fmtPct(stats.spy_total_return),cls(stats.spy_total_return))+
+    stat("超额收益",fmtPct(stats.alpha),cls(stats.alpha))+
+    stat("最大回撤",(stats.max_drawdown*100).toFixed(2)+"%","down")+
+    stat("夏普比率",stats.sharpe_ratio.toFixed(2))+
+    stat("周胜率",(stats.win_rate*100).toFixed(1)+"%")+
+    stat("总周数",stats.n_weeks)+
+    stat("每周持仓",stats.top_n+" 只")+
+    "</div>";
+  html+='<div class="chart-wrap"><h3>净值曲线 · 4 套策略对比 (起始 $1.00)</h3><canvas id="bt-chart" height="100"></canvas></div>';
+  if(d.latest_positions.length===0){
+    html+='<div class="chart-wrap"><h3>本周持仓（最新一期 · ★ 三道闸门）</h3><p style="color:#8b949e;padding:12px">本周无持仓 (regime gate 未通过)</p></div>';
+  }else{
+    html+='<div class="chart-wrap"><h3>本周持仓（最新一期 · ★ 三道闸门）</h3><table style="width:auto"><thead><tr><th>#</th><th>Ticker</th><th>层级</th><th>综合分</th><th>买入价</th><th>当前价</th><th>本周收益</th></tr></thead><tbody>';
+    d.latest_positions.forEach((p,i)=>{
+      html+="<tr><td>"+(i+1)+'</td><td><span class="ticker">'+p.ticker+'</span></td><td><span class="layer-tag">'+p.layer+"</span></td><td>"+p.score+'</td><td class="num">$'+fmt(p.entry_price)+'</td><td class="num">$'+fmt(p.current_price)+'</td><td class="num '+cls(p.return)+'">'+fmtPct(p.return)+"</td></tr>";
+    });
+    html+="</tbody></table></div>";
+  }
+  // Comparison table
+  const labels={S1:"B&H SPY",S2:"6M-Mom Top3",S3:"Comp Top10",S4:"★ 3-Gate+ATR"};
+  let cmpRows="";
+  ["S1","S2","S3","S4"].forEach(k=>{
+    const m=stats[k+"_metrics"]||{};
+    const star=k==="S4"?' style="background:#1a3a1f;font-weight:600"':"";
+    cmpRows+="<tr"+star+'><td style="padding:6px 12px">'+labels[k]+'</td><td class="num '+cls(m.total_return||0)+'" style="padding:6px 12px">'+fmtPct(m.total_return||0)+'</td><td class="num '+cls(m.cagr||0)+'" style="padding:6px 12px">'+fmtPct(m.cagr||0)+'</td><td class="num" style="padding:6px 12px">'+(m.sharpe||0).toFixed(2)+'</td><td class="num down" style="padding:6px 12px">'+((m.max_drawdown||0)*100).toFixed(2)+'%</td><td class="num" style="padding:6px 12px">'+((m.win_rate||0)*100).toFixed(1)+"%</td></tr>";
+  });
+  html+='<div class="chart-wrap"><h3>四策略横评</h3><table style="width:100%;font-size:12px"><thead style="background:#1a1f26"><tr><th style="padding:8px 12px;text-align:left">策略</th><th class="num" style="padding:8px 12px">总收益</th><th class="num" style="padding:8px 12px">年化</th><th class="num" style="padding:8px 12px">Sharpe</th><th class="num" style="padding:8px 12px">最大回撤</th><th class="num" style="padding:8px 12px">周胜率</th></tr></thead><tbody>'+cmpRows+'</tbody></table><p style="color:#8b949e;font-size:11px;margin-top:10px">★ = 你的实际策略 (dashboard 里的"可入场"信号)</p></div>';
+  document.getElementById("bt-content").innerHTML=html;
+
+  if(chartInstance)chartInstance.destroy();
+  const ec=d.equity_curve;
+  chartInstance=new Chart(document.getElementById("bt-chart").getContext("2d"),{
+    type:"line",
+    data:{labels:ec.dates,datasets:[
+      {label:"★ 三道闸门+ATR (S4)",data:ec.strategy,borderColor:"#d63031",backgroundColor:"rgba(214,48,49,0.10)",fill:true,tension:0.2,pointRadius:0,borderWidth:2.5},
+      {label:"综合分Top10 (S3)",data:ec.s3_composite_top10||[],borderColor:"#58a6ff",tension:0.2,pointRadius:0,borderWidth:2},
+      {label:"6月均值动量Top3 (S2)",data:ec.s2_momentum_top3||[],borderColor:"#f39c12",tension:0.2,pointRadius:0,borderWidth:2},
+      {label:"B&H SPY",data:ec.spy,borderColor:"#8b949e",tension:0.2,pointRadius:0,borderDash:[5,5],borderWidth:1.5}
+    ]},
+    options:{responsive:true,plugins:{legend:{labels:{color:"#e6edf3"},position:"top"},tooltip:{mode:"index",intersect:false}},interaction:{mode:"index",intersect:false},scales:{x:{ticks:{color:"#8b949e",maxTicksLimit:12},grid:{color:"#21262d"}},y:{ticks:{color:"#8b949e",callback:v=>v.toFixed(2)+"x"},grid:{color:"#21262d"}}}}
+  });
+}
+
+loadData();
+setInterval(()=>{if(document.getElementById("view-dashboard").classList.contains("active"))loadData();},60000);
+setInterval(()=>{if(data)document.getElementById("last-updated").textContent="更新于 "+fmtAgo(data.generated_at);},30000);
+</script>
+</body>
+</html>
