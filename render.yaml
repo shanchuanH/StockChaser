@@ -2,6 +2,7 @@ services:
   - type: web
     name: stockchaser
     runtime: python
+    plan: starter        # $7/月，常驻不睡眠，可挂 Persistent Disk
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn serve:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120
     envVars:
@@ -10,3 +11,7 @@ services:
       - key: USE_MOCK
         value: false      # set to true for demo/staging without real yfinance calls
     healthCheckPath: /api/status
+    disk:
+      name: stockchaser-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1           # $0.25/GB/月 ≈ $0.25 额外
