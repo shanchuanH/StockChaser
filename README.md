@@ -39,6 +39,35 @@ python scripts/bt_v33.py
 
 ---
 
+## 📲 Telegram 推送（PRIORITY 变化通知）
+
+每次后台 pipeline 跑完会调用 `scripts/notify_telegram.py`：把 `signals.json` 里
+`is_priority=true` 的 ticker 跟上次快照 `data/priority_snapshot.json` 做 diff，
+有新增 / 移除 / 排名变化时推一条消息到 Telegram。没配置环境变量时静默跳过，
+不会拖累 pipeline。
+
+### 一次性设置
+
+1. Telegram 找 [@BotFather](https://t.me/BotFather) 发 `/newbot`，记下 **bot token**。
+2. 找 [@userinfobot](https://t.me/userinfobot) 拿你自己的 **chat_id**（私聊推送）；
+   群组推送则把机器人加进群后给群发一句话，再访问
+   `https://api.telegram.org/bot<token>/getUpdates` 看 `chat.id`。
+3. 在 Render Dashboard → Service → **Environment** 里加：
+   - `TELEGRAM_BOT_TOKEN` = `123456:ABC...`
+   - `TELEGRAM_CHAT_ID`   = `123456789`
+   - `TELEGRAM_NOTIFY_ON_START` = `1`（可选，部署后立即推一次当前 Top）
+4. 本地调试同样用环境变量：
+
+```bash
+TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python scripts/notify_telegram.py
+```
+
+> 注：Render free 实例文件系统是易失的，快照随容器重启重置。
+> 因此默认 **冷启动不推送**——第一次 pipeline 只播种 snapshot。
+> 把 `TELEGRAM_NOTIFY_ON_START=1` 打开则每次重启都会播一次当前 Top。
+
+---
+
 ## 🔥 跑真实数据完整流程（推荐每周一上午做一次）
 
 ```bash

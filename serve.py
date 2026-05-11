@@ -67,6 +67,16 @@ def run_pipeline(use_mock=False):
                 return False, s.name + " failed: " + r.stderr[:400]
         except Exception as exc:
             return False, s.name + " error: " + str(exc)
+
+    # Best-effort: push priority change to Telegram. Never fail the pipeline.
+    try:
+        subprocess.run(
+            [sys.executable, str(SCRIPTS / "notify_telegram.py")],
+            capture_output=True, text=True, timeout=30,
+        )
+    except Exception as exc:
+        print("notify_telegram dispatch error: " + str(exc))
+
     return True, "ok"
 
 

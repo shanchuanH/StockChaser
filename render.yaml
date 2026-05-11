@@ -10,6 +10,14 @@ services:
         value: true
       - key: USE_MOCK
         value: false      # set to true for demo/staging without real yfinance calls
+      # Telegram bot (set values in Render dashboard, NOT in this file).
+      # Empty / unset = notifier silently no-ops.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false       # secret — fill in via Render dashboard
+      - key: TELEGRAM_CHAT_ID
+        sync: false       # secret — fill in via Render dashboard
+      - key: TELEGRAM_NOTIFY_ON_START
+        value: "0"        # "1" to send a snapshot message on cold start
     healthCheckPath: /api/status
     disk:
       name: stockchaser-data
