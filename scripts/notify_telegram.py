@@ -38,6 +38,20 @@ TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
 HTTP_TIMEOUT = 10
 
 
+_KEYBOARD = {
+    "inline_keyboard": [
+        [
+            {"text": "🔥 PRIORITY", "callback_data": "pri"},
+            {"text": "📊 Top 10",   "callback_data": "top"},
+        ],
+        [
+            {"text": "📡 状态",     "callback_data": "sta"},
+            {"text": "🔄 手动刷新", "callback_data": "ref"},
+        ],
+    ]
+}
+
+
 def _send_telegram(token: str, chat_id: str, text: str) -> bool:
     url = TELEGRAM_API.format(token=token)
     payload = urllib.parse.urlencode({
@@ -45,6 +59,7 @@ def _send_telegram(token: str, chat_id: str, text: str) -> bool:
         "text": text,
         "parse_mode": "HTML",
         "disable_web_page_preview": "true",
+        "reply_markup": json.dumps(_KEYBOARD, ensure_ascii=False),
     }).encode("utf-8")
     req = urllib.request.Request(url, data=payload, method="POST")
     try:

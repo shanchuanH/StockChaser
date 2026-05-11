@@ -6,6 +6,9 @@ import time
 import argparse
 import threading
 import subprocess
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -25,6 +28,12 @@ WEB  = ROOT / "web"
 DATA = ROOT / "data"
 SCRIPTS = ROOT / "scripts"
 SEED = ROOT / "data_seed"
+
+sys.path.insert(0, str(SCRIPTS))
+try:
+    import telegram_bot
+except ImportError:
+    telegram_bot = None  # type: ignore[assignment]
 
 DATA.mkdir(exist_ok=True)
 
@@ -169,6 +178,7 @@ if _IS_RENDER:
     _t = threading.Thread(target=background_refresh, args=(_USE_MOCK,), daemon=True)
     _t.start()
     print("Background refresher started (Render mode).")
+    _register_telegram_webhook()
 
 
 @app.route("/")
@@ -226,6 +236,146 @@ def api_universe_get():
     if not fp.exists():
         return jsonify({"error": "universe.json not found"}), 404
     return Response(fp.read_text(encoding="utf-8"), mimetype="application/json")
+
+
+# ---------- Telegram interactive bot ----------
+
+_TG_API = "https://api.telegram.org/bot{token}/{method}"
+
+
+def _telegram_call(method, payload, timeout=10):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    if not token:
+        return False
+    data = urllib.parse.urlencode(payload).encode("utf-8")
+    req = urllib.request.Request(
+        _TG_API.format(token=token, method=method),
+        data=data, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status < 300
+    except (urllib.error.URLError, TimeoutError) as exc:
+        print(f"telegram {method} failed: {exc}")
+        return False
+
+
+def _telegram_send(chat_id, text, reply_markup=None):
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": "true",
+    }
+    if reply_markup:
+        payload["reply_markup"] = json.dumps(reply_markup, ensure_ascii=False)
+    return _telegram_call("sendMessage", payload, timeout=10)
+
+
+def _telegram_answer_callback(cb_id):
+    if not cb_id:
+        return
+    _telegram_call("answerCallbackQuery", {"callback_query_id": cb_id}, timeout=5)
+
+
+def _trigger_async_refresh():
+    """Fire-and-forget pipeline run (used by /refresh button & command)."""
+    with _lock:
+        if _state["refreshing"]:
+            return False
+        _state["refreshing"] = True
+    threading.Thread(target=_do_refresh, args=(_USE_MOCK,), daemon=True).start()
+    return True
+
+
+def _state_snapshot():
+    with _lock:
+        return dict(_state)
+
+
+def _authorized(chat_id, from_id):
+    """Only the chat_id we were configured for can drive the bot."""
+    authed = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not authed:
+        return False
+    return str(chat_id) == authed or str(from_id) == authed
+
+
+@app.route("/api/telegram/webhook", methods=["POST"])
+def api_telegram_webhook():
+    expected_secret = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
+    if expected_secret:
+        got = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if got != expected_secret:
+            return jsonify({"error": "unauthorized"}), 401
+
+    if telegram_bot is None:
+        return jsonify({"ok": True})
+
+    update = request.get_json(silent=True) or {}
+
+    callback = update.get("callback_query")
+    if callback:
+        msg = callback.get("message") or {}
+        chat_id = (msg.get("chat") or {}).get("id")
+        from_id = (callback.get("from") or {}).get("id")
+        _telegram_answer_callback(callback.get("id"))
+        if not _authorized(chat_id, from_id):
+            return jsonify({"ok": True})
+        try:
+            result = telegram_bot.dispatch_callback(callback.get("data", ""), _state_snapshot())
+        except Exception as exc:
+            print(f"telegram dispatch_callback error: {exc}")
+            return jsonify({"ok": True})
+        if result:
+            if result.get("side_effect") == "refresh":
+                _trigger_async_refresh()
+            _telegram_send(chat_id, result["text"], result.get("reply_markup"))
+        return jsonify({"ok": True})
+
+    msg = update.get("message") or update.get("edited_message")
+    if msg:
+        chat_id = (msg.get("chat") or {}).get("id")
+        from_id = (msg.get("from") or {}).get("id")
+        text = msg.get("text", "")
+        if not _authorized(chat_id, from_id):
+            return jsonify({"ok": True})
+        try:
+            result = telegram_bot.dispatch(text, _state_snapshot())
+        except Exception as exc:
+            print(f"telegram dispatch error: {exc}")
+            return jsonify({"ok": True})
+        if result:
+            if result.get("side_effect") == "refresh":
+                _trigger_async_refresh()
+            _telegram_send(chat_id, result["text"], result.get("reply_markup"))
+        return jsonify({"ok": True})
+
+    return jsonify({"ok": True})
+
+
+def _register_telegram_webhook():
+    """Auto-register webhook with Telegram on Render boot."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    base = (os.environ.get("RENDER_EXTERNAL_URL")
+            or os.environ.get("BASE_URL", "")).strip()
+    if not token or not base:
+        print("telegram webhook: skipped (no token or external URL)")
+        return
+    secret = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
+    url = base.rstrip("/") + "/api/telegram/webhook"
+    payload = {
+        "url": url,
+        "drop_pending_updates": "true",
+        "allowed_updates": json.dumps(["message", "callback_query"]),
+    }
+    if secret:
+        payload["secret_token"] = secret
+    try:
+        ok = _telegram_call("setWebhook", payload, timeout=10)
+        print(f"telegram setWebhook → {url} ({'ok' if ok else 'failed'})")
+    except Exception as exc:
+        print(f"telegram setWebhook error: {exc}")
 
 
 @app.route("/api/universe", methods=["POST"])

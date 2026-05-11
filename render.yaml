@@ -18,6 +18,10 @@ services:
         sync: false       # secret — fill in via Render dashboard
       - key: TELEGRAM_NOTIFY_ON_START
         value: "0"        # "1" to send a snapshot message on cold start
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false       # optional but recommended — Telegram echoes this
+                          # back as X-Telegram-Bot-Api-Secret-Token header so
+                          # we can reject calls from anyone else
     healthCheckPath: /api/status
     disk:
       name: stockchaser-data
