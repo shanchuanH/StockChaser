@@ -15,6 +15,7 @@ data/signals.json
 data/backtest_results.json
 data/history.parquet
 data/history.csv
+data/priority_snapshot.json
 
 # Deprecated Excel watchlist (replaced by data/universe.json)
 AI_Chain_Watchlist.xlsx

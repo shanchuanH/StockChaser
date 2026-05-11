@@ -33,5 +33,8 @@ for name, cmd in steps:
         print(f"\n❌ 步骤失败: {name}  (exit {rc})")
         sys.exit(rc)
 
+print("\n━━━ Telegram 通知（如已配置） ━━━")
+subprocess.call([sys.executable, str(SCRIPTS / "notify_telegram.py")])
+
 print("\n✅ 全部完成。启动服务：python serve.py")
 print("   或直接打开：web/index.html（需要本地服务器）")
