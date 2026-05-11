@@ -178,7 +178,8 @@ if _IS_RENDER:
     _t = threading.Thread(target=background_refresh, args=(_USE_MOCK,), daemon=True)
     _t.start()
     print("Background refresher started (Render mode).")
-    _register_telegram_webhook()
+    # Webhook registration is deferred to after all helper functions are
+    # defined further down — see the bottom of the file.
 
 
 @app.route("/")
@@ -389,6 +390,11 @@ def api_universe_post():
         return jsonify({"status": "ok", "count": len(data)})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+# All helper functions are now defined; safe to register the webhook.
+if _IS_RENDER:
+    _register_telegram_webhook()
 
 
 def main():
