@@ -39,12 +39,29 @@ python scripts/bt_v33.py
 
 ---
 
-## 📲 Telegram 推送（PRIORITY 变化通知）
+## 📲 Telegram 推送 + 交互式 Bot
 
-每次后台 pipeline 跑完会调用 `scripts/notify_telegram.py`：把 `signals.json` 里
-`is_priority=true` 的 ticker 跟上次快照 `data/priority_snapshot.json` 做 diff，
-有新增 / 移除 / 排名变化时推一条消息到 Telegram。没配置环境变量时静默跳过，
-不会拖累 pipeline。
+两部分能力：
+
+1. **自动推送** — 每次后台 pipeline 跑完，`scripts/notify_telegram.py` 把
+   `signals.json` 里 `is_priority=true` 的 ticker 跟 `data/priority_snapshot.json`
+   做 diff，有新增 / 移除 / 排名变化时推一条消息。
+2. **交互查询** — `POST /api/telegram/webhook` 路由 + `scripts/telegram_bot.py`
+   把消息变成指令，可以在 Telegram 直接看盘。
+
+支持的指令：
+
+| 指令 | 作用 |
+|---|---|
+| `/top [N]` | 按 conviction Top N（默认 10，最多 25）|
+| `/priority` | 当前 PRIORITY 列表 |
+| `/ticker NVDA` | 单个 ticker 详情卡 |
+| `/status` | 服务状态 / regime / action 分布 |
+| `/refresh` | 触发后台 pipeline，立即返回，刷完会自动推 priority 变化 |
+| `/help` | 显示指令列表 |
+
+每条机器人回复底下都带 4 个内联按钮（🔥 PRIORITY / 📊 Top 10 / 📡 状态 / 🔄 刷新），
+不想敲指令就直接点。
 
 ### 一次性设置
 
@@ -56,7 +73,12 @@ python scripts/bt_v33.py
    - `TELEGRAM_BOT_TOKEN` = `123456:ABC...`
    - `TELEGRAM_CHAT_ID`   = `123456789`
    - `TELEGRAM_NOTIFY_ON_START` = `1`（可选，部署后立即推一次当前 Top）
-4. 本地调试同样用环境变量：
+   - `TELEGRAM_WEBHOOK_SECRET` = 任意 32+ 位随机串（推荐，可选；
+     用 `openssl rand -hex 16` 生成）
+4. Render 容器启动时会自动调 Telegram `setWebhook` 把
+   `https://<你的-render-url>/api/telegram/webhook` 注册成机器人的回调，
+   之后你在 Telegram 给 bot 发的每条消息都会推到这个 endpoint 处理。
+5. 本地调试同样用环境变量：
 
 ```bash
 TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python scripts/notify_telegram.py
