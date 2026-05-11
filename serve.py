@@ -24,8 +24,34 @@ ROOT = Path(__file__).resolve().parent
 WEB  = ROOT / "web"
 DATA = ROOT / "data"
 SCRIPTS = ROOT / "scripts"
+SEED = ROOT / "data_seed"
 
 DATA.mkdir(exist_ok=True)
+
+
+def _seed_data_dir():
+    """Copy seed files (e.g. universe.json) into DATA if missing.
+
+    Needed because Render Persistent Disks mount empty volumes over the
+    data/ directory, hiding any files committed in git. Seed files live
+    outside the mount point and are copied in on cold start.
+    """
+    if not SEED.exists():
+        return
+    import shutil
+    for src in SEED.iterdir():
+        if not src.is_file():
+            continue
+        dst = DATA / src.name
+        if not dst.exists():
+            try:
+                shutil.copy2(src, dst)
+                print(f"seeded {dst.name} from data_seed/")
+            except Exception as exc:
+                print(f"seed copy failed for {src.name}: {exc}")
+
+
+_seed_data_dir()
 
 app = Flask(__name__, static_folder=str(WEB), static_url_path="")
 
