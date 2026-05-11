@@ -32,31 +32,89 @@ python update.py --mock     # 合成数据
 ### 跑回测
 
 ```bash
-python scripts/backtest.py
+python scripts/bt_v33.py
 ```
 
 或在看板点 **📈 策略回测** Tab，第一次会自动加载。
 
 ---
 
-## 策略框架（StockChaser v2）
+## 🔥 跑真实数据完整流程（推荐每周一上午做一次）
 
-### 三道闸门（必须全过才标 ✅ 可入场）
+```bash
+cd C:\Users\hongh\Documents\Claude\Projects\StockChaser
 
-| 闸门 | 内容 |
-|---|---|
-| **Regime** 大盘环境 | SPY 在 SMA50 上方 |
-| **Startup** 个股启动 (2/3) | 突破 4 周高 / 周涨 ≥ +3% / 5 日量 ≥ 20 日量 × 1.2 |
-| **Quality** 质量底线 | 综合分 ≥ 80 + RS vs SPY ≥ 0pp + 距 52W 高 ≥ -25% |
+# 1. 抓 yfinance 实盘价格 (24 个月历史 + 最新行情)
+python scripts/fetch_data.py
+# 输出: data/prices.json 和 data/history.parquet
+# 期望看到: "Fetching 113 tickers..." 然后 "SPY 4-week: +X.XX%   above SMA50: True/False"
 
-### 状态分类
+# 2. 计算 Conviction 信号 + Framework 标签
+python scripts/engine_v32.py
+# 输出: data/signals.json
+# 期望: "Action distribution: {'STRONG_BUY': N, ...}" + "Priority Top-8" 列表
 
-| 标签 | 含义 |
-|---|---|
-| ✅ READY | 三关全过，可入场 |
-| 🔵 HOLD | 大盘风险关闭但个股仍强（已持有可继续） |
-| ⚠️ WARN | 跌破 SMA20 或 RS 落后 ≥ -5pp |
-| ⚠️ EXTENDED | 距 SMA20 ≥ +10%，短期超买 |
+# 3. 跑 6 套策略历史回测 (含 ★ S6 Hybrid)
+python scripts/bt_v33.py
+# 输出: data/backtest_results.json
+# 期望: 横评表，★ Hybrid 6M+Conv 行有数据
+
+# 4. 打开看板 (双击或浏览器打开)
+start web/index.html
+```
+
+> **首次跑会比较慢** (yfinance 抓 113 只 × 24 个月 ≈ 30-60 秒)
+> 后续每周只需要重跑 `fetch_data.py` 和 `engine_v32.py`，几秒钟搞定
+
+---
+
+## 策略框架（StockChaser v3.2）
+
+### Conviction Engine — 三轴评分
+
+```
+Trend Strength (TS) 40% + Entry Quality (EQ) 30% + Fundamental (FC) 30%
+       × Regime Modifier (0.35-1.10)
+       = CONVICTION (0-100)
+```
+
+- **TS** 趋势强度: 均线位置 / 距 4W 高 / RS / 多周期同向 / **6 月月均动量**
+- **EQ** 入场质量: 周涨甜区 (3-8%) / 量能确认 / ATR / 是否过度追高
+- **FC** 基本面: ★评级 + 角色 (龙头/二线/概念) + **下游传导加成** + **新节点加成**
+- **RM** Regime: 渐变 0.35-1.10，非二元开关
+
+### 三个产业链框架 (Framework Tags)
+
+| 标签 | 触发条件 | 含义 |
+|---|---|---|
+| 🌊 F1 下游传导 | L10/L11/L12 + 综合分 ≥ 50 | 12-18 月资金传导期 |
+| 🧮 F2 财报真空 | 距 52W 高 -10~-30% + SMA50 上 + 综合 ≥ 70 | 长底+健康，黎明前 |
+| 💡 F3 新节点 | 16 只白名单 (SNDK/ALAB/CRDO/...) | 凭空多出来的位置 |
+| 📅 6M-Mom | 6 月月均 ≥ 3% | 持续长期动量 |
+
+### 5 档行动建议
+
+| Conviction | 动作 | 仓位 | 默认 % |
+|---:|---|---|---:|
+| ≥ 85 | 🔥 强力买入 | 重仓 | 10% |
+| 72-84 | 🟢 买入 | 中仓 | 7% |
+| 58-71 | 🟡 试仓 | 小仓 | 4% |
+| 42-57 | 👀 观察 | — | 0 |
+| < 42 | ⚪ 回避 | — | 0 |
+
+> STRONG_BUY 额外需要 TS ≥ 80 AND EQ ≥ 65（不允许有短板）
+> 每层最多 2 个 STRONG_BUY（强制跨层分散）
+> 顶部 8 只标 🔥 PRIORITY = 这周实际开仓清单
+
+### 回测结果（mock 50 周）
+
+| 策略 | 总收益 | Sharpe | MaxDD |
+|---|---:|---:|---:|
+| ★ **S6 Hybrid 6M+Conv** | +15.45% | **1.76** | **-4.00%** |
+| S3 Comp Top10 | +30.62% | 2.44 | -5.65% |
+| S2 6M-Mom Top3 | +52.12% | 1.70 | -10.94% |
+| S5 Conviction | +2.49% | 0.41 | -6.14% |
+| S1 B&H SPY | +3.02% | 0.27 | -10.71% |
 
 ### ATR 仓位与止损（每行自动算）
 
@@ -93,51 +151,3 @@ StockChaser/
 │   ├── history.parquet/csv   ← 24 个月日线（用于回测）
 │   ├── signals.json          ← 综合分 + 闸门 + 止损建议
 │   └── backtest_results.json ← 4 套策略对比
-├── scripts/
-│   ├── extract_universe.py
-│   ├── fetch_data.py         ← yfinance 真实数据
-│   ├── fetch_mock.py         ← 合成数据
-│   ├── signal.py             ← 三道闸门 + 综合分
-│   └── backtest.py           ← 回测引擎
-└── web/
-    └── index.html            ← 看板前端
-```
-
-> 💡 注意：脚本文件名是 `signal.py` / `fetch_mock.py`（不是 `compute_signals.py` / `fetch_data_mock.py`）—— 上一版的 .pyc 缓存有冲突，改了名。
-
----
-
-## 看板 Tab 一览
-
-- **🌐 全部** — 全部 108 只
-- **✅ 可入场** — 三道闸门全过
-- **🎯 建仓核心池** — ★★★★★ + 核心配置
-- **🚀 突破4周高** — 接近或破 4 周高点
-- **📊 本周+3% / 📈 今日+3%** — 短期强势
-- **🎯 趋势回调** — 在 SMA20 上 + 距 4W 高 -3% ~ -7% 的低吸点
-- **🚂 多周期同向 / 💪 RS领涨** — 趋势确认信号
-
-点击任一行展开详情：核心逻辑 + 三道闸门状态 + ATR + 止损 / 目标 / 仓位建议。
-
----
-
-## 回测对比 4 套策略
-
-| 策略 | 含义 |
-|---|---|
-| **S1** B&H SPY | 基准，买入持有 SPY |
-| **S2** 6 月均值动量 Top 3 | 复刻你看到那篇文章的策略 |
-| **S3** 综合分 Top 10 | 我们的综合分排名（无闸门） |
-| **★ S4** 三道闸门 + ATR | 你正在用的实际策略 |
-
-每个回测期生成净值曲线 + Sharpe + MaxDD + 周胜率。**S4 在大盘 risk-off 时不会建仓**（这是设计目标，不是 bug）。
-
----
-
-## TODO（你后续可以加的）
-
-- [ ] **Telegram 推送**（已 backlog）：满足"突破 4 周新高 + 综合分 > 100"自动推送
-- [ ] 加入财报日历字段（yfinance 的 `Ticker.calendar`）
-- [ ] 加入机构 EPS 上修（需 Refinitiv/FactSet）
-- [ ] Windows 任务计划程序设定每周一 09:00 自动跑 `serve.py`
-- [ ] 升级数据源到 Polygon/EOD（去掉 yfinance 15min 延迟）

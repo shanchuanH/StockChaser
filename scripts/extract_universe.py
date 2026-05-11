@@ -1,7 +1,4 @@
-"""Extract ticker universe from AI_Chain_Watchlist.xlsx → data/universe.json.
-
-Run once after editing the xlsx; output is consumed by fetch_data.py.
-"""
+"""Extract ticker universe from AI_Chain_Watchlist.xlsx → data/universe.json."""
 import json
 from pathlib import Path
 from openpyxl import load_workbook
@@ -24,7 +21,6 @@ for r in range(2, ws.max_row + 1):
         "layer": ws.cell(row=r, column=4).value,
         "subsector": ws.cell(row=r, column=5).value,
         "role": ws.cell(row=r, column=6).value,
-        # convert ★★★★★ → 5
         "potential": (ws.cell(row=r, column=7).value or "").count("★"),
         "strategy": ws.cell(row=r, column=8).value,
         "logic": ws.cell(row=r, column=9).value,

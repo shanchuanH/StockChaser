@@ -1,17 +1,14 @@
-# 基础 Web 框架
+# Web framework
 Flask==3.0.0
-gunicorn==26.0.0
+gunicorn==21.2.0
 
-# 数据处理（根据你项目用到的库保留）
+# Data
 pandas
 numpy
 pyarrow
 yfinance
 
-# 辅助工具
+# Utilities
 python-dotenv
 requests
 urllib3
-
-# 如果你用到了 Excel 处理（比如 AI_Chain_Watchlist.xlsx）
-openpyxl

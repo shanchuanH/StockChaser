@@ -1,3 +1,24 @@
+# Python
 .venv/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Shell scripts
 *.sh
+
+# Runtime-generated data (re-created by pipeline on each run)
+# universe.json is intentionally NOT ignored — it's the source of truth
+data/prices.json
+data/signals.json
+data/backtest_results.json
+data/history.parquet
+data/history.csv
+
+# Deprecated Excel watchlist (replaced by data/universe.json)
+AI_Chain_Watchlist.xlsx
+.~lock.*.xlsx#
+
+# Environment / secrets
+.env

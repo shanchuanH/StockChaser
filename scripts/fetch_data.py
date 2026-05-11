@@ -10,7 +10,7 @@ Outputs:
 """
 from __future__ import annotations
 import json, sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,16 +27,15 @@ def fetch():
     try:
         import yfinance as yf
         import pandas as pd
-        import numpy as np
     except ImportError:
-        print("ERROR: pip install yfinance pandas numpy openpyxl pyarrow")
+        print("ERROR: pip install yfinance pandas openpyxl pyarrow")
         sys.exit(1)
 
     universe = json.loads(UNIVERSE.read_text(encoding="utf-8"))
     tickers = sorted(set([u["ticker"] for u in universe] + ["SPY", "QQQ"]))
     print(f"Fetching {len(tickers)} tickers (24 months)…")
 
-    end = datetime.utcnow()
+    end = datetime.now(timezone.utc)
     start = end - timedelta(days=730)
     df = yf.download(
         tickers,
@@ -45,28 +44,38 @@ def fetch():
         auto_adjust=True, progress=True, group_by="ticker", threads=True,
     )
 
-    # Build a long-format history dataframe and persist it
-    long_rows = []
+    # Build long-format history (batch per ticker — no iterrows loop)
+    pieces = []
     for t in tickers:
         try:
-            sub = df[t][["Open", "High", "Low", "Close", "Volume"]].dropna()
-        except Exception:
+            sub = df[t][["Open", "High", "Low", "Close", "Volume"]].dropna(how="any")
+        except (KeyError, TypeError, AttributeError):
             continue
-        for date, row in sub.iterrows():
-            long_rows.append({
-                "ticker": t, "date": date.strftime("%Y-%m-%d"),
-                "open": float(row.Open), "high": float(row.High),
-                "low": float(row.Low), "close": float(row.Close),
-                "volume": float(row.Volume),
-            })
-    hist_df = pd.DataFrame(long_rows)
+        if len(sub) == 0:
+            continue
+        piece = sub.reset_index()
+        date_col = piece.columns[0]
+        piece = piece.rename(columns={
+            date_col: "date",
+            "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume",
+        })
+        piece["ticker"] = t
+        piece["date"] = pd.to_datetime(piece["date"]).dt.strftime("%Y-%m-%d")
+        for col in ("open", "high", "low", "close", "volume"):
+            piece[col] = pd.to_numeric(piece[col], errors="coerce")
+        piece = piece.dropna(subset=["open", "high", "low", "close", "volume"])
+        pieces.append(piece[["ticker", "date", "open", "high", "low", "close", "volume"]])
+    hist_df = pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame(
+        columns=["ticker", "date", "open", "high", "low", "close", "volume"],
+    )
+
     HIST.parent.mkdir(exist_ok=True)
+    # Always write CSV (universally readable). Try parquet too if engine available.
+    hist_df.to_csv(HIST.with_suffix(".csv"), index=False)
     try:
         hist_df.to_parquet(HIST, index=False)
     except Exception:
-        # parquet engine missing → fallback CSV
-        hist_df.to_csv(HIST.with_suffix(".csv"), index=False)
-        print(f"  (parquet engine missing, fell back to {HIST.with_suffix('.csv').name})")
+        print(f"  (no parquet engine — CSV only at {HIST.with_suffix('.csv').name})")
 
     # SPY benchmark return
     spy_close = df["SPY"]["Close"].dropna()
@@ -74,7 +83,7 @@ def fetch():
     spy_above_sma50 = bool(spy_close.iloc[-1] > spy_close.iloc[-50:].mean()) if len(spy_close) >= 50 else False
 
     out = {
-        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "spy_4w_return_pct": round(spy_ret_4w, 2),
         "spy_above_sma50": spy_above_sma50,
         "is_mock": False,

@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: stockchaser
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn serve:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120
+    envVars:
+      - key: RENDER
+        value: true
+      - key: USE_MOCK
+        value: false      # set to true for demo/staging without real yfinance calls
+    healthCheckPath: /api/status

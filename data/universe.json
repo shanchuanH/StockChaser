@@ -1402,5 +1402,70 @@
     "catalyst": "光纤业务订单",
     "cn_pair": "—",
     "risk": "传统业务拖累"
+  },
+  {
+    "ticker": "TTMI",
+    "name": "TTM Technologies",
+    "layer": "L7·整柜·OEM",
+    "subsector": "AI 高端 PCB 制造",
+    "role": "龙头",
+    "potential": 5,
+    "strategy": "题材交易",
+    "logic": "AI 服务器 PCB 复杂度跳级 (M9 板); 高端 HDI/Q 布 PCB 新位置",
+    "catalyst": "AI PCB 收入占比",
+    "cn_pair": "沪电股份·胜宏科技",
+    "risk": "周期+地缘"
+  },
+  {
+    "ticker": "HXL",
+    "name": "Hexcel",
+    "layer": "L9·半导体底座",
+    "subsector": "复合材料/纤维",
+    "role": "二线",
+    "potential": 3,
+    "strategy": "题材交易",
+    "logic": "复合材料概念; CCL 玻纤布短缺类似去年存储",
+    "catalyst": "AI PCB 间接需求",
+    "cn_pair": "—",
+    "risk": "航空业务主导"
+  },
+  {
+    "ticker": "APH",
+    "name": "Amphenol",
+    "layer": "L4·机架内互联",
+    "subsector": "连接器/线缆",
+    "role": "龙头",
+    "potential": 4,
+    "strategy": "卫星",
+    "logic": "AI 服务器高速连接器+电缆; 224G/PCIe 6.0 受益",
+    "catalyst": "数据中心营收增速",
+    "cn_pair": "立讯精密",
+    "risk": "估值高"
+  },
+  {
+    "ticker": "ROG",
+    "name": "Rogers Corp",
+    "layer": "L4·机架内互联",
+    "subsector": "高频 PCB 基板",
+    "role": "二线",
+    "potential": 4,
+    "strategy": "题材交易",
+    "logic": "射频+ADAS+AI 服务器高频材料; 800G/1.6T PCB 上行",
+    "catalyst": "AI 营收占比",
+    "cn_pair": "生益科技",
+    "risk": "汽车业务波动"
+  },
+  {
+    "ticker": "MTRN",
+    "name": "Materion",
+    "layer": "L9·半导体底座",
+    "subsector": "先进材料 (溅射靶材)",
+    "role": "二线",
+    "potential": 3,
+    "strategy": "题材交易",
+    "logic": "半导体溅射靶材+先进封装材料; AI 设备升级受益",
+    "catalyst": "半导体材料营收",
+    "cn_pair": "—",
+    "risk": "周期"
   }
 ]
