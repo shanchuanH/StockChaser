@@ -357,135 +357,116 @@ function renderHoldingControl(r){
 }
 
 function renderFriendlyAdvice(r){
-  // 完全没有金融术语的"人话版"建议。已持仓 vs 未持仓 分别处理。
+  // 决断式：一句话告诉用户做什么
   const pf=pfLoadSync();
   const held=pf[r.ticker];
   const curr=r.latest_price;
   const conv=r.conviction_score||0;
   const pb=r.playbook;
-  // ====== 已持仓分支 ======
+
+  // ====== 已持仓 ======
   if(held){
     const entry=held.buy_price, shares=held.shares;
     const ret_pct=(curr/entry-1)*100;
     const profit_usd=(curr-entry)*shares;
-    let title="", color="#3fb950", emoji="✓", why="", actions=[], warn="";
+    let verb="HOLD", verb_color="#3fb950", emoji="", act_text="", reason="", stop_text="";
 
-    if(conv<45){
-      title="🚨 该减半仓了"; color="#f39c12"; emoji="⚠️";
-      why="系统对这只股票的信心从开始的高分掉到了 "+conv+" 分（低于 45 是警戒线）。意思是趋势在变弱，**先卖一半锁住前面赚的，剩一半看情况**。";
-      actions=["卖出 <strong>"+Math.floor(shares/2)+" 股</strong> ($"+(curr*Math.floor(shares/2)).toFixed(0)+")", "剩余 "+Math.ceil(shares/2)+" 股观察 1-2 周，分数再跌就全清"];
-      warn="如果你不动 → 万一继续跌，前面赚的钱可能全吐回去";
+    if(pb && pb.initial_stop_price && curr<=pb.initial_stop_price){
+      verb="SELL"; verb_color="#d63031"; emoji="🛑";
+      act_text="立即全部卖出 "+shares+" 股";
+      reason="跌穿 $"+pb.initial_stop_price+" 止损线，按规则全清（亏损 ~$"+Math.abs(profit_usd).toFixed(0)+"）";
     }
-    else if(pb && pb.initial_stop_price && curr<=pb.initial_stop_price){
-      title="🛑 触发止损了，全部卖"; color="#d63031"; emoji="🚨";
-      why="跌到了一开始就设好的止损线 $"+pb.initial_stop_price+"（大约 -8%）。**继续持有就违反规则**了，止损的意义是不让小亏变成大亏。";
-      actions=["立刻市价卖出全部 <strong>"+shares+" 股</strong>（实现亏损 ~$"+Math.abs(profit_usd).toFixed(0)+"）"];
-      warn="纪律最贵的时候就是亏的时候。这一刀砍下来才能保住下一笔生命线";
+    else if(conv<45){
+      const sell=Math.floor(shares/2);
+      verb="SELL"; verb_color="#f39c12"; emoji="⚠️";
+      act_text="卖出 "+sell+" 股（保留 "+(shares-sell)+" 股）";
+      reason="系统分数从高位掉到 "+conv+"（< 45 警戒线），趋势变弱，先减半锁利润";
     }
     else if(ret_pct>=30){
-      title="💰 该锁利润了"; color="#3fb950"; emoji="🎉";
-      why="已经赚 <strong>+"+ret_pct.toFixed(1)+"%</strong>（约 $"+profit_usd.toFixed(0)+"）。**先卖一部分让钱真正入袋**，剩下的让趋势继续涨。这叫『骑稳赢家，但先吃肉』。";
-      actions=["卖出 <strong>"+Math.floor(shares*0.33)+" 股</strong>（套现 $"+(curr*Math.floor(shares*0.33)).toFixed(0)+"，锁 1/3 利润）",
-               "剩余 "+Math.ceil(shares*0.67)+" 股，止损单上挂到 <strong>$"+(entry*1.15).toFixed(2)+"</strong>（保证最少赚 +15%）"];
-      warn="如果都不动 → 股票回吐时你之前的利润可能蒸发一半以上";
+      const sell=Math.floor(shares*0.33);
+      verb="SELL"; verb_color="#3fb950"; emoji="💰";
+      act_text="卖出 "+sell+" 股 ($"+(curr*sell).toFixed(0)+")";
+      reason="已赚 +"+ret_pct.toFixed(1)+"%，锁 1/3 利润落袋，剩下 "+(shares-sell)+" 股继续骑趋势";
+      stop_text="止损上调到 $"+(entry*1.15).toFixed(2)+"（保证最少赚 +15%）";
     }
     else if(ret_pct>=10){
-      title="⬆️ 把止损线往上挪"; color="#3fb950"; emoji="📈";
-      why="赚 <strong>+"+ret_pct.toFixed(1)+"%</strong>，现在是把『亏损保险』上调的好时机。**让赚的钱不再可能变回亏的钱**。";
-      actions=["把止损单从原来的 $"+(pb?pb.initial_stop_price:(entry*0.92).toFixed(2))+" 上移到 <strong>$"+(entry*1.05).toFixed(2)+"</strong>（保证最差也赚 +5%）",
-               "继续持有等更大涨幅"];
-      warn="如果你的券商不支持挂止损单，至少在心里记住这个价位，跌到就立刻手动卖";
+      verb="HOLD"; verb_color="#3fb950"; emoji="⬆️";
+      act_text="不动，但上调止损线";
+      reason="已赚 +"+ret_pct.toFixed(1)+"%，把止损线挪到入场价 +5% 锁住部分利润";
+      stop_text="止损上调到 $"+(entry*1.05).toFixed(2)+"（最少赚 +5%）";
     }
     else if(ret_pct>=-3){
-      title="✓ 继续持有，啥都不用做"; color="#3fb950"; emoji="⏳";
-      why="买入价 $"+entry.toFixed(2)+"，当前 $"+curr.toFixed(2)+"，波动正常范围内。**新仓需要时间发酵**。";
-      const stopP=pb?pb.initial_stop_price:(entry*0.92);
-      actions=["确保止损单挂在 <strong>$"+stopP.toFixed(2)+"</strong>（最多亏 ~8%）",
-               "等 1-2 周看看趋势"];
-      // 是否到下一批加仓点
+      // Check next batch trigger
       if(pb && pb.entry_plan && held.batches){
         const used=held.batches.length;
         if(used<pb.entry_plan.length){
           const next=pb.entry_plan[used];
           if(curr>=next.price*0.99){
-            actions.unshift("🎯 已经涨到加仓点 $"+next.price+"：再买 <strong>"+next.shares+" 股</strong>");
-            title="➕ 该加仓了 (Step "+next.step+"/3)";
-            why+=" 而且现在涨到了你计划好的第 "+next.step+" 批加仓点。";
+            verb="BUY"; verb_color="#3fb950"; emoji="➕";
+            act_text="加仓 "+next.shares+" 股 ($"+(curr*next.shares).toFixed(0)+")";
+            reason="股价已到第 "+next.step+" 批加仓点 $"+next.price+"，按 3 批计划买入";
+            stop_text="止损保持 $"+pb.initial_stop_price;
           }
         }
       }
-      warn="";
+      if(verb==="HOLD"){
+        emoji="✓";
+        act_text="不动，继续持有";
+        reason="买入价 $"+entry.toFixed(2)+"，当前 $"+curr.toFixed(2)+"，波动正常，新仓需要时间发酵";
+        stop_text="止损挂 $"+(pb?pb.initial_stop_price:(entry*0.92).toFixed(2));
+      }
     }
     else{
-      title="⚠️ 接近止损线，盯紧"; color="#f39c12"; emoji="👀";
+      verb="HOLD"; verb_color="#f39c12"; emoji="👀";
       const stopP=pb?pb.initial_stop_price:(entry*0.92);
-      const space=((curr-stopP)/curr*100);
-      why="亏 "+ret_pct.toFixed(1)+"%，还离止损线 $"+stopP.toFixed(2)+" 还有 "+space.toFixed(1)+"% 缓冲空间。**不要因为心痛就提前清仓，但跌到止损线绝不能犹豫**。";
-      actions=["确认止损单挂在 <strong>$"+stopP.toFixed(2)+"</strong>",
-               "如果跌穿，按规则全部卖出"];
-      warn="心理战：浮亏看着难受，但只要没跌穿止损线就别动。统计上一半的亏单最终会回来";
+      act_text="不动，盯紧止损线";
+      reason="亏 "+ret_pct.toFixed(1)+"%，距止损线 $"+stopP.toFixed(2)+" 还有 "+((curr-stopP)/curr*100).toFixed(1)+"% 缓冲";
+      stop_text="跌穿 $"+stopP.toFixed(2)+" 立即全清";
     }
-    return '<div style="background:linear-gradient(135deg,'+color+'22,'+color+'08);border-left:4px solid '+color+';border-radius:6px;padding:14px;margin-top:12px">'+
-      '<div style="font-size:16px;font-weight:700;color:'+color+';margin-bottom:8px">'+emoji+' '+title+'</div>'+
-      '<div style="color:#c9d1d9;font-size:13px;line-height:1.7;margin-bottom:10px">'+why+'</div>'+
-      '<div style="background:#0d1218;padding:10px;border-radius:4px"><strong style="color:#fff;font-size:12px">具体怎么做：</strong><ol style="margin:6px 0 0 22px;color:#e6edf3;font-size:13px;line-height:1.8">'+
-      actions.map(a=>'<li>'+a+'</li>').join('')+'</ol></div>'+
-      (warn?'<div style="color:#f39c12;font-size:11.5px;margin-top:8px">💭 '+warn+'</div>':'')+
+
+    const verbBadge={BUY:{bg:"#1f6f3f",text:"📈 加仓"},SELL:{bg:"#6e2a2a",text:"📉 卖出"},HOLD:{bg:"#2a4a6e",text:"⏳ 持有"}}[verb];
+    return '<div style="background:linear-gradient(135deg,'+verb_color+'33,'+verb_color+'11);border-left:5px solid '+verb_color+';border-radius:8px;padding:16px;margin-top:12px">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">'+
+      '<span style="background:'+verbBadge.bg+';color:#fff;padding:4px 12px;border-radius:4px;font-weight:700;font-size:12px">'+verbBadge.text+'</span>'+
+      '<span style="font-size:18px;font-weight:700;color:'+verb_color+'">'+emoji+' '+act_text+'</span>'+
+      '</div>'+
+      '<div style="color:#c9d1d9;font-size:13px;line-height:1.6">'+reason+'</div>'+
+      (stop_text?'<div style="color:#f39c12;font-size:11.5px;margin-top:6px">🛡 '+stop_text+'</div>':'')+
       '</div>';
   }
-  // ====== 未持仓分支 ======
-  const action=r.action||'AVOID';
-  const verdict={
-    STRONG_BUY:{emoji:'🔥',title:'强烈建议买入',color:'#d63031',short:'系统认为这是这周最好的几只之一'},
-    BUY:       {emoji:'🟢',title:'值得买入',color:'#3fb950',short:'综合评分过线，可以入场'},
-    TRY_BUY:   {emoji:'🟡',title:'可以试一下',color:'#f1c40f',short:'信号偏弱，小仓试水，错了不痛'},
-    WATCH:     {emoji:'👀',title:'再观望一下',color:'#8b949e',short:'当前价位/趋势不够好，等等'},
-    AVOID:     {emoji:'⚪',title:'不要碰',color:'#8b949e',short:'分数太低，机会成本太大'}
-  }[action]||{emoji:'?',title:action,color:'#8b949e',short:''};
 
-  // why in plain language
-  let why=verdict.short+'（系统打分 <strong>'+conv+'/100</strong>）。';
-  const tags=(r.framework_tags||[]).map(t=>t.code);
-  if(r.is_priority)why='🔥 这只是今日 PRIORITY #'+r.priority_rank+' — 系统从 113 只里挑出的 Top 8 之一。';
-  else if(tags.includes('6M'))why+=' 关键加分点：过去 6 个月每月平均涨幅超 3%（长期动量强）。';
-
-  if(action==='AVOID'||action==='WATCH'){
-    return '<div style="background:linear-gradient(135deg,'+verdict.color+'22,'+verdict.color+'08);border-left:4px solid '+verdict.color+';border-radius:6px;padding:14px;margin-top:12px">'+
-      '<div style="font-size:16px;font-weight:700;color:'+verdict.color+';margin-bottom:8px">'+verdict.emoji+' '+verdict.title+'</div>'+
-      '<div style="color:#c9d1d9;font-size:13px;line-height:1.7">'+why+' 等到分数 ≥ 58 (TRY_BUY) 再考虑。</div>'+
+  // ====== 未持仓 ======
+  const action=r.action||"AVOID";
+  if(["STRONG_BUY","BUY","TRY_BUY"].includes(action) && pb){
+    const b1=pb.entry_plan[0];
+    const v={
+      STRONG_BUY:{color:"#d63031",emoji:"🔥",label:"强烈建议"},
+      BUY:{color:"#3fb950",emoji:"🟢",label:"建议买入"},
+      TRY_BUY:{color:"#f1c40f",emoji:"🟡",label:"试仓"}
+    }[action];
+    let reason="系统打分 "+conv+"/100。当前价 $"+fmt(curr)+"，市价单买入即可。";
+    if(r.is_priority)reason="🔥 PRIORITY #"+r.priority_rank+" - 系统从 113 只 AI 链股里挑出的 Top 8。" + reason;
+    return '<div style="background:linear-gradient(135deg,'+v.color+'33,'+v.color+'11);border-left:5px solid '+v.color+';border-radius:8px;padding:16px;margin-top:12px">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">'+
+      '<span style="background:#1f6f3f;color:#fff;padding:4px 12px;border-radius:4px;font-weight:700;font-size:12px">📈 买入</span>'+
+      '<span style="font-size:18px;font-weight:700;color:'+v.color+'">'+v.emoji+' 买 '+b1.shares+' 股 ≈ $'+b1.cash+'</span>'+
+      '</div>'+
+      '<div style="color:#c9d1d9;font-size:13px;line-height:1.6">'+reason+'</div>'+
+      '<div style="color:#f39c12;font-size:11.5px;margin-top:6px">🛡 同时挂止损单 $'+pb.initial_stop_price+'（-8%，最坏亏 ~$'+pb.single_trade_risk_usd+'）</div>'+
+      '<div style="color:#8b949e;font-size:11px;margin-top:4px">这是 3 批入场计划第 1 批。涨到 $'+pb.entry_plan[1].price+' 再买第 2 批 '+pb.entry_plan[1].shares+' 股。</div>'+
       '</div>';
   }
-  // Buy advice
-  if(!pb)return '<div style="padding:14px;color:#8b949e">建议生成失败，请刷新</div>';
-  const stop_pct=((pb.initial_stop_price-curr)/curr*100);
-  const target1_pct=((pb.profit_taking[0].target_price-curr)/curr*100);
-  const target2_pct=((pb.profit_taking[1].target_price-curr)/curr*100);
-
-  return '<div style="background:linear-gradient(135deg,'+verdict.color+'22,'+verdict.color+'08);border-left:4px solid '+verdict.color+';border-radius:6px;padding:14px;margin-top:12px">'+
-    '<div style="font-size:16px;font-weight:700;color:'+verdict.color+';margin-bottom:8px">'+verdict.emoji+' '+verdict.title+'</div>'+
-    '<div style="color:#c9d1d9;font-size:13px;line-height:1.7;margin-bottom:12px">'+why+'</div>'+
-
-    '<div style="background:#0d1218;padding:10px;border-radius:4px;margin-bottom:10px">'+
-    '<strong style="color:#fff;font-size:12px">💰 怎么买（分 3 次，安全做法）</strong>'+
-    '<ol style="margin:6px 0 0 22px;color:#e6edf3;font-size:13px;line-height:1.8">'+
-    '<li><strong>现在立刻买</strong> '+pb.entry_plan[0].shares+' 股 ≈ $'+pb.entry_plan[0].cash+'（建议用市价单）</li>'+
-    '<li>如果<strong>涨到 $'+pb.entry_plan[1].price+'</strong>（+3%）再买 '+pb.entry_plan[1].shares+' 股</li>'+
-    '<li>如果<strong>再涨到 $'+pb.entry_plan[2].price+'</strong>（突破近 4 周高点）买最后 '+pb.entry_plan[2].shares+' 股</li>'+
-    '</ol>'+
-    '<p style="color:#8b949e;font-size:11px;margin-top:6px">总共会花掉 <strong style="color:#fff">$'+pb.target_cash_usd+'</strong>（你 $20K 仓位的 '+pb.target_position_pct+'%）。<br>分批是因为：万一刚买就跌，你只亏 1/3 不是全部。</p>'+
+  // WATCH / AVOID
+  const v2={
+    WATCH:{color:"#f1c40f",emoji:"👀",badge:"⏸ 观望",text:"暂不买入"},
+    AVOID:{color:"#8b949e",emoji:"⚪",badge:"⛔ 回避",text:"不要买"}
+  }[action]||{color:"#8b949e",emoji:"?",badge:action,text:action};
+  return '<div style="background:linear-gradient(135deg,'+v2.color+'33,'+v2.color+'11);border-left:5px solid '+v2.color+';border-radius:8px;padding:16px;margin-top:12px">'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">'+
+    '<span style="background:#444;color:#fff;padding:4px 12px;border-radius:4px;font-weight:700;font-size:12px">'+v2.badge+'</span>'+
+    '<span style="font-size:18px;font-weight:700;color:'+v2.color+'">'+v2.emoji+' '+v2.text+'</span>'+
     '</div>'+
-
-    '<div style="background:#0d1218;padding:10px;border-radius:4px;margin-bottom:10px">'+
-    '<strong style="color:#fff;font-size:12px">🛑 什么时候卖（看到价位就执行，不要犹豫）</strong>'+
-    '<ol style="margin:6px 0 0 22px;color:#e6edf3;font-size:13px;line-height:1.8">'+
-    '<li style="color:#ff7676"><strong>跌到 $'+pb.initial_stop_price+'</strong>（'+stop_pct.toFixed(1)+'%）→ <strong>全部卖出，止损</strong>（最坏亏 $'+pb.single_trade_risk_usd+'，相当于你 '+pb.single_trade_risk_pct+'% 资金）</li>'+
-    '<li><strong>涨到 $'+pb.profit_taking[0].target_price+'</strong>（+'+target1_pct.toFixed(1)+'%）→ 卖 1/4 锁部分利润</li>'+
-    '<li><strong>涨到 $'+pb.profit_taking[1].target_price+'</strong>（+'+target2_pct.toFixed(1)+'%）→ 再卖 1/3</li>'+
-    '<li>剩下的"骑趋势" — 一直拿到系统分数跌破 45 再考虑清仓</li>'+
-    '</ol>'+
-    '</div>'+
-
-    '<div style="font-size:11.5px;color:#8b949e">💭 <strong>核心心法</strong>：买入前先把止损价 $'+pb.initial_stop_price+' 记在便签上。涨了开心，跌到这个数立刻卖 — 不许找借口。</div>'+
+    '<div style="color:#c9d1d9;font-size:13px;line-height:1.6">系统打分 '+conv+'/100，需要 ≥ 58 才进入试仓区间。等下次刷新或市场变化再看。</div>'+
     '</div>';
 }
 
@@ -647,11 +628,12 @@ function renderPortfolioView(){
   const config=(data&&data.portfolio_config)||{};
   const totalCash=config.portfolio_cash_usd||20000;
   if(tickers.length===0){
-    document.getElementById('pf-content').innerHTML='<div class="empty-bt"><h3 style="color:#fff;margin-bottom:14px">💼 我的持仓</h3><p>还没有持仓记录</p><p style="margin-top:8px;color:#8b949e">在主表点击任一行的 📌 买入 按钮</p></div>';
+    document.getElementById('pf-content').innerHTML='<div class="empty-bt"><h3 style="color:#fff;margin-bottom:14px">💼 我的持仓</h3><p>还没有持仓记录</p><p style="margin-top:8px;color:#8b949e">在主表点击任一行的 📌 买入 按钮记录你的实际成交</p></div>';
     return;
   }
+  // Build position cards
   let totalCost=0,totalValue=0;
-  const rows=[];
+  const cards=[];
   for(const t of tickers){
     const h=pf[t];
     const r=(data&&data.rows||[]).find(x=>x.ticker===t);
@@ -659,29 +641,103 @@ function renderPortfolioView(){
     const cost=h.buy_price*h.shares;
     const val=px*h.shares;
     totalCost+=cost; totalValue+=val;
-    rows.push({h,r,px,cost,val,ret:(px/h.buy_price-1)*100});
+    const ret=(px/h.buy_price-1)*100;
+    let verb="HOLD", verb_color="#58a6ff", action_text="✓ 持有", reason="";
+    if(r){
+      const conv=r.conviction_score||0;
+      const pb=r.playbook;
+      if(pb && pb.initial_stop_price && px<=pb.initial_stop_price){
+        verb="SELL"; verb_color="#d63031";
+        action_text="🛑 全清 "+h.shares+" 股";
+        reason="跌穿 $"+pb.initial_stop_price+" 止损线";
+      }else if(conv<45){
+        verb="SELL"; verb_color="#f39c12";
+        action_text="⚠️ 卖 "+Math.floor(h.shares/2)+" 股";
+        reason="Conv "+conv+" < 45";
+      }else if(ret>=30){
+        verb="SELL"; verb_color="#3fb950";
+        action_text="💰 卖 "+Math.floor(h.shares*0.33)+" 股";
+        reason="+"+ret.toFixed(1)+"% 锁 1/3 利润";
+      }else if(pb && pb.entry_plan && h.batches && h.batches.length<pb.entry_plan.length){
+        const next=pb.entry_plan[h.batches.length];
+        if(next && px>=next.price*0.99){
+          verb="BUY"; verb_color="#3fb950";
+          action_text="➕ 加仓 "+next.shares+" 股";
+          reason="到第 "+next.step+" 批加仓点 $"+next.price;
+        }
+      }
+      if(verb==="HOLD"){
+        if(ret>=10){ verb_color="#3fb950"; action_text="⬆️ 上调止损"; reason="+"+ret.toFixed(1)+"%，止损 $"+(h.buy_price*1.05).toFixed(2); }
+        else if(ret<-3){ verb_color="#f39c12"; action_text="👀 盯紧止损"; reason=ret.toFixed(1)+"%，接近止损线"; }
+        else { action_text="✓ 持有"; reason="新仓发酵中"; }
+      }
+    }
+    cards.push({t,h,r,px,cost,val,ret,verb,verb_color,action_text,reason});
   }
-  rows.sort((a,b)=>b.val-a.val);
-  const totalRet=totalCost>0?(totalValue/totalCost-1)*100:0;
+  const urgency=c=>{
+    if(c.action_text.includes("全清"))return 0;
+    if(c.action_text.includes("⚠️"))return 1;
+    if(c.verb==="SELL")return 2;
+    if(c.verb==="BUY")return 3;
+    if(c.action_text.includes("⬆️"))return 4;
+    if(c.action_text.includes("👀"))return 5;
+    return 6;
+  };
+  cards.sort((a,b)=>urgency(a)-urgency(b)||b.val-a.val);
 
-  let html='<div style="padding:0 20px 20px"><h3 style="color:#fff;margin-bottom:10px">💼 我的持仓 ('+tickers.length+'/'+(config.max_positions||10)+')</h3>';
+  const totalRet=totalCost>0?(totalValue/totalCost-1)*100:0;
+  const cashLeft=totalCash-totalCost;
+
+  let html='<div style="padding:0 20px 20px">';
+  html+='<h3 style="color:#fff;margin-bottom:14px">💼 我的持仓 ('+tickers.length+'/'+(config.max_positions||10)+')</h3>';
   html+='<div class="backtest-grid">';
   html+='<div class="stat"><div class="label">已投入</div><div class="value">$'+totalCost.toFixed(0)+'</div></div>';
   html+='<div class="stat"><div class="label">当前市值</div><div class="value '+(totalRet>=0?"up":"down")+'">$'+totalValue.toFixed(0)+'</div></div>';
   html+='<div class="stat"><div class="label">总浮盈</div><div class="value '+(totalRet>=0?"up":"down")+'">'+(totalRet>=0?"+":"")+totalRet.toFixed(2)+'%</div></div>';
-  html+='<div class="stat"><div class="label">现金剩余</div><div class="value">$'+(totalCash-totalCost).toFixed(0)+'</div></div>';
+  html+='<div class="stat"><div class="label">现金剩余</div><div class="value">$'+cashLeft.toFixed(0)+'</div></div>';
   html+='</div>';
-  html+='<div class="chart-wrap"><h3>每只持仓 — 下一步建议</h3><table style="width:100%;font-size:11.5px"><thead><tr style="background:#1a1f26"><th style="padding:8px">Ticker</th><th style="padding:8px">买入价</th><th class="num" style="padding:8px">股数</th><th class="num" style="padding:8px">现价</th><th class="num" style="padding:8px">浮盈</th><th class="num" style="padding:8px">Conv</th><th style="padding:8px">📍 下一步</th></tr></thead><tbody>';
-  for(const x of rows){
-    const next=x.r?determineNextAction(x.h,x.r):{action:"-",color:"#8b949e",detail:""};
-    const retCls=x.ret>=0?"up":"down";
-    html+='<tr style="border-bottom:1px solid #21262d"><td style="padding:8px"><span class="ticker">'+x.h.ticker+'</span></td><td class="num" style="padding:8px">$'+x.h.buy_price.toFixed(2)+'</td><td class="num" style="padding:8px">'+x.h.shares+'</td><td class="num" style="padding:8px">$'+x.px.toFixed(2)+'</td><td class="num '+retCls+'" style="padding:8px"><strong>'+(x.ret>=0?"+":"")+x.ret.toFixed(2)+'%</strong></td><td class="num" style="padding:8px">'+(x.r?x.r.conviction_score:"-")+'</td><td style="padding:8px"><strong style="color:'+next.color+'">'+next.action+'</strong><br><span style="font-size:10px;color:#8b949e">'+next.detail+'</span></td></tr>';
+
+  const groups=[
+    {key:"SELL",title:"🚨 需要立即操作",color:"#d63031",cards:cards.filter(c=>c.verb==="SELL")},
+    {key:"BUY",title:"📈 加仓机会",color:"#3fb950",cards:cards.filter(c=>c.verb==="BUY")},
+    {key:"HOLD",title:"✓ 继续持有",color:"#58a6ff",cards:cards.filter(c=>c.verb==="HOLD")}
+  ];
+
+  for(const g of groups){
+    if(g.cards.length===0)continue;
+    html+='<div style="margin-bottom:20px"><h3 style="color:'+g.color+';font-size:14px;margin-bottom:10px;border-left:4px solid '+g.color+';padding-left:8px">'+g.title+' ('+g.cards.length+')</h3>';
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px">';
+    for(const c of g.cards){
+      const retCls=c.ret>=0?"up":"down";
+      const conv=c.r?c.r.conviction_score:"-";
+      html+='<div style="background:var(--bg2);border:1px solid '+c.verb_color+'44;border-left:4px solid '+c.verb_color+';border-radius:8px;padding:14px">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">';
+      html+='<div><div style="font-size:18px;font-weight:700;color:#58a6ff">'+c.t+'</div><div style="font-size:10px;color:#8b949e;margin-top:2px">'+(c.r?c.r.layer:"-")+'</div></div>';
+      html+='<div style="text-align:right"><div class="num '+retCls+'" style="font-size:18px;font-weight:700">'+(c.ret>=0?"+":"")+c.ret.toFixed(2)+'%</div>';
+      html+='<div style="font-size:11px;color:#8b949e">'+(c.val-c.cost>=0?"+":"")+'$'+(c.val-c.cost).toFixed(0)+'</div></div>';
+      html+='</div>';
+      html+='<div style="background:'+c.verb_color+'22;border-radius:5px;padding:8px 12px;margin-bottom:8px">';
+      html+='<div style="font-size:15px;font-weight:700;color:'+c.verb_color+'">'+c.action_text+'</div>';
+      html+='<div style="font-size:11px;color:#c9d1d9;margin-top:3px">'+c.reason+'</div>';
+      html+='</div>';
+      html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:11px;color:#8b949e;margin-bottom:8px">';
+      html+='<div>买入 $'+c.h.buy_price.toFixed(2)+'</div>';
+      html+='<div>现价 $'+c.px.toFixed(2)+'</div>';
+      html+='<div>'+c.h.shares+' 股</div>';
+      html+='<div>Conv '+conv+'</div>';
+      html+='</div>';
+      html+='<div style="display:flex;gap:6px"><button onclick="event.stopPropagation();promptAddBatch(\''+c.t+'\','+c.px+')" style="flex:1;background:#3fb950;color:#000;border:none;padding:5px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">➕ 加仓</button>';
+      html+='<button onclick="event.stopPropagation();promptReduce(\''+c.t+'\')" style="flex:1;background:#f39c12;color:#000;border:none;padding:5px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">➖ 减仓</button>';
+      html+='<button onclick="event.stopPropagation();if(confirm(\'确认清仓 '+c.t+'?\')){pfRemove(\''+c.t+'\').then(()=>{renderPortfolioView();render();});}" style="flex:1;background:#d63031;color:#fff;border:none;padding:5px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">🚪 清仓</button>';
+      html+='</div></div>';
+    }
+    html+='</div></div>';
   }
-  html+='</tbody></table></div></div>';
+
+  html+='</div>';
   document.getElementById('pf-content').innerHTML=html;
 }
 
-// View-tab routing
 document.querySelectorAll(".view-tab").forEach(b=>{
   b.addEventListener("click",()=>{
     document.querySelectorAll(".view-tab").forEach(x=>x.classList.remove("active"));
