@@ -254,6 +254,52 @@ function renderRow(r,i){
     "</tr>";
 }
 
+function renderPlaybook(r){
+  const pb=r.playbook;
+  if(!pb)return '<div style="padding:14px;color:#8b949e">⚪ 此股票当前为 '+(r.action||'-')+', 暂无操作手册 (仅 TRY_BUY 及以上生成)</div>';
+  const portfolio_cash=(data.portfolio_config&&data.portfolio_config.portfolio_cash_usd)||10000;
+  let html='<div style="background:#0d1218;border:1px solid #d63031;border-radius:8px;padding:14px;margin-top:14px">';
+  html+='<h4 style="color:#ff6b6b;font-size:13px;margin-bottom:10px">📋 傻瓜式操作手册 (基于 $'+portfolio_cash+' 总仓)</h4>';
+  // Summary
+  html+='<div style="background:rgba(214,48,49,0.08);padding:10px;border-radius:5px;margin-bottom:12px">';
+  html+='<strong style="color:#fff;font-size:14px">'+pb.summary+'</strong><br>';
+  html+='<span style="color:#8b949e;font-size:11px">总投入 ≈ $'+pb.target_cash_usd+' · '+pb.target_shares+' 股 · 单笔风险 $'+pb.single_trade_risk_usd+' ('+pb.single_trade_risk_pct+'% 组合)</span>';
+  html+='</div>';
+
+  // Entry plan
+  html+='<div style="margin-bottom:12px"><strong style="color:#3fb950;font-size:12px">📥 建仓 (3 批递进)</strong>';
+  html+='<table style="width:100%;font-size:11px;margin-top:6px"><thead><tr style="background:#1a1f26"><th style="padding:5px 8px;text-align:left">#</th><th style="padding:5px 8px;text-align:left">触发条件</th><th class="num" style="padding:5px 8px">价格</th><th class="num" style="padding:5px 8px">股数</th><th class="num" style="padding:5px 8px">金额</th></tr></thead><tbody>';
+  for(const e of pb.entry_plan){
+    html+='<tr style="border-bottom:1px solid #21262d"><td style="padding:5px 8px;color:#3fb950;font-weight:600">'+e.step+'</td><td style="padding:5px 8px">'+e.trigger+'</td><td class="num" style="padding:5px 8px">$'+fmt(e.price)+'</td><td class="num" style="padding:5px 8px">'+e.shares+'</td><td class="num" style="padding:5px 8px">$'+fmt(e.cash)+'</td></tr>';
+  }
+  html+='</tbody></table></div>';
+
+  // Stop ladder
+  html+='<div style="margin-bottom:12px"><strong style="color:#f39c12;font-size:12px">🛡 移动止损 (随股价上移)</strong>';
+  html+='<table style="width:100%;font-size:11px;margin-top:6px"><thead><tr style="background:#1a1f26"><th style="padding:5px 8px;text-align:left">涨幅</th><th class="num" style="padding:5px 8px">触发价</th><th class="num" style="padding:5px 8px">止损线</th><th style="padding:5px 8px">逻辑</th></tr></thead><tbody>';
+  for(const s of pb.stop_ladder){
+    html+='<tr style="border-bottom:1px solid #21262d"><td style="padding:5px 8px;color:#f39c12">+'+s.after_gain_pct+'%</td><td class="num" style="padding:5px 8px">$'+fmt(s.trigger_price)+'</td><td class="num down" style="padding:5px 8px">$'+(s.stop_price?fmt(s.stop_price):'动态')+'</td><td style="padding:5px 8px;color:#8b949e">'+s.desc+'</td></tr>';
+  }
+  html+='</tbody></table></div>';
+
+  // Profit taking
+  html+='<div style="margin-bottom:12px"><strong style="color:#d63031;font-size:12px">💰 阶梯减仓 (R = 一倍风险距离)</strong>';
+  html+='<table style="width:100%;font-size:11px;margin-top:6px"><thead><tr style="background:#1a1f26"><th style="padding:5px 8px;text-align:left">目标</th><th class="num" style="padding:5px 8px">价格</th><th class="num" style="padding:5px 8px">涨幅</th><th class="num" style="padding:5px 8px">卖出</th><th style="padding:5px 8px">说明</th></tr></thead><tbody>';
+  for(const p of pb.profit_taking){
+    html+='<tr style="border-bottom:1px solid #21262d"><td style="padding:5px 8px;color:#d63031;font-weight:600">+'+p.r_multiple+'R</td><td class="num up" style="padding:5px 8px">$'+fmt(p.target_price)+'</td><td class="num up" style="padding:5px 8px">+'+p.gain_pct+'%</td><td class="num" style="padding:5px 8px">'+p.shares_to_sell+' 股</td><td style="padding:5px 8px;color:#8b949e">'+p.desc+'</td></tr>';
+  }
+  html+='</tbody></table></div>';
+
+  // Exit triggers
+  html+='<div><strong style="color:#ff6b6b;font-size:12px">🚪 强制离场 (任一触发)</strong><ul style="margin:6px 0 0 18px;color:#c9d1d9;font-size:11.5px">';
+  for(const t of pb.exit_triggers){
+    html+='<li style="margin-bottom:3px">'+t+'</li>';
+  }
+  html+='</ul></div>';
+  html+='</div>';
+  return html;
+}
+
 function renderDetail(r){
   const am=data.action_meta[r.action]||{};
   return '<tr class="detail"><td colspan="15">'+
@@ -268,8 +314,6 @@ function renderDetail(r){
     "</div><div>"+
     '<h4>📌 操作建议 ('+am.emoji+" "+am.label+')</h4>'+
     '<p style="font-size:14px"><span class="label">动作</span><strong style="color:'+am.color+'">'+am.emoji+" "+am.label+'</strong> · <span class="size-tag">'+(r.size_class||"-")+'</span> · <span class="horizon-tag">'+(r.holding_horizon||"-")+" "+(r.horizon_days||"")+"</span></p>"+
-    '<p><span class="label">建议仓位</span><strong>'+r.size_pct_recommended+'%</strong> (按 $10K 组合 ≈ '+r.n_shares_at_10k+" 股)</p>"+
-    "<p><span class=\"label\">买入 / 止损 / 目标</span>$"+fmt(r.latest_price)+" → 止损 $"+fmt(r.suggested_stop_price)+" · 目标 $"+fmt(r.suggested_target_price)+"</p>"+
     '<p><span class="label">ATR(20)</span>$'+fmt(r.atr_20)+" ("+fmt(r.atr_pct,"%")+" 日波动)</p>"+
     "<h4 style=\"margin-top:12px\">置信度三轴</h4>"+
     '<p><span class="label">趋势强度 TS</span><strong>'+r.trend_strength+"</strong> / 100 "+'<span style="color:#8b949e;font-size:11px">(均线、距高、RS、多周期同向)</span></p>'+
@@ -277,7 +321,7 @@ function renderDetail(r){
     '<p><span class="label">基本面 FC</span><strong>'+r.fund_conviction+"</strong> / 100 "+'<span style="color:#8b949e;font-size:11px">(★ + 角色 + 层级)</span></p>'+
     "<p><span class=\"label\">Regime 改正</span>×"+r.regime_modifier+" "+(data.regime_label||"")+"</p>"+
     "<p style=\"font-size:13px;margin-top:8px\"><span class=\"label\">→ 置信度</span><strong style=\"color:"+convColor(r.conviction_score)+";font-size:18px\">"+fmt(r.conviction_score,"",1)+"</strong> / 100</p>"+
-    "</div></div></td></tr>";
+    "</div></div>"+renderPlaybook(r)+"</td></tr>";
 }
 
 function render(){

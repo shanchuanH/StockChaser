@@ -20,6 +20,15 @@ UNIVERSE = ROOT / "data" / "universe.json"
 PRICES = ROOT / "data" / "prices.json"
 OUT = ROOT / "data" / "signals.json"
 
+# Optional playbook generator (傻瓜式 操作手册)
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    from playbook import annotate_rows as _annotate_playbooks, load_config as _load_pb_config
+except ImportError:
+    _annotate_playbooks = None
+    _load_pb_config = lambda: {}
+
 MAX_STRONG_BUY_PER_LAYER = 2
 PRIORITY_TOP_N = 8
 
@@ -421,6 +430,15 @@ def main():
     prev_priority = load_prior_priority()  # hysteresis carry-over
     rows = apply_priority_rank(rows, prev_priority_set=prev_priority)
 
+    # Attach personalized playbook (傻瓜式 操作手册) for actionable signals
+    pb_config = None
+    if _annotate_playbooks is not None:
+        try:
+            pb_config = _load_pb_config()
+            _annotate_playbooks(rows, pb_config)
+        except Exception as e:
+            print(f"  ! playbook generation failed: {e}")
+
     out = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "spy_4w_return_pct": prices.get("spy_4w_return_pct"),
@@ -445,6 +463,7 @@ def main():
             "max_strong_buy_per_layer": MAX_STRONG_BUY_PER_LAYER,
             "priority_top_n": PRIORITY_TOP_N,
         },
+        "portfolio_config": pb_config or {},
         "rows": rows,
     }
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
