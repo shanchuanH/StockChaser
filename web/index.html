@@ -356,12 +356,149 @@ function renderHoldingControl(r){
   return '<div style="font-size:10px"><strong class="'+cls+'">'+(ret>=0?"+":"")+ret.toFixed(1)+'%</strong><br><span style="color:#8b949e">'+held.shares+' 股 @ $'+held.buy_price.toFixed(2)+'</span></div>';
 }
 
+function renderFriendlyAdvice(r){
+  // 完全没有金融术语的"人话版"建议。已持仓 vs 未持仓 分别处理。
+  const pf=pfLoadSync();
+  const held=pf[r.ticker];
+  const curr=r.latest_price;
+  const conv=r.conviction_score||0;
+  const pb=r.playbook;
+  // ====== 已持仓分支 ======
+  if(held){
+    const entry=held.buy_price, shares=held.shares;
+    const ret_pct=(curr/entry-1)*100;
+    const profit_usd=(curr-entry)*shares;
+    let title="", color="#3fb950", emoji="✓", why="", actions=[], warn="";
+
+    if(conv<45){
+      title="🚨 该减半仓了"; color="#f39c12"; emoji="⚠️";
+      why="系统对这只股票的信心从开始的高分掉到了 "+conv+" 分（低于 45 是警戒线）。意思是趋势在变弱，**先卖一半锁住前面赚的，剩一半看情况**。";
+      actions=["卖出 <strong>"+Math.floor(shares/2)+" 股</strong> ($"+(curr*Math.floor(shares/2)).toFixed(0)+")", "剩余 "+Math.ceil(shares/2)+" 股观察 1-2 周，分数再跌就全清"];
+      warn="如果你不动 → 万一继续跌，前面赚的钱可能全吐回去";
+    }
+    else if(pb && pb.initial_stop_price && curr<=pb.initial_stop_price){
+      title="🛑 触发止损了，全部卖"; color="#d63031"; emoji="🚨";
+      why="跌到了一开始就设好的止损线 $"+pb.initial_stop_price+"（大约 -8%）。**继续持有就违反规则**了，止损的意义是不让小亏变成大亏。";
+      actions=["立刻市价卖出全部 <strong>"+shares+" 股</strong>（实现亏损 ~$"+Math.abs(profit_usd).toFixed(0)+"）"];
+      warn="纪律最贵的时候就是亏的时候。这一刀砍下来才能保住下一笔生命线";
+    }
+    else if(ret_pct>=30){
+      title="💰 该锁利润了"; color="#3fb950"; emoji="🎉";
+      why="已经赚 <strong>+"+ret_pct.toFixed(1)+"%</strong>（约 $"+profit_usd.toFixed(0)+"）。**先卖一部分让钱真正入袋**，剩下的让趋势继续涨。这叫『骑稳赢家，但先吃肉』。";
+      actions=["卖出 <strong>"+Math.floor(shares*0.33)+" 股</strong>（套现 $"+(curr*Math.floor(shares*0.33)).toFixed(0)+"，锁 1/3 利润）",
+               "剩余 "+Math.ceil(shares*0.67)+" 股，止损单上挂到 <strong>$"+(entry*1.15).toFixed(2)+"</strong>（保证最少赚 +15%）"];
+      warn="如果都不动 → 股票回吐时你之前的利润可能蒸发一半以上";
+    }
+    else if(ret_pct>=10){
+      title="⬆️ 把止损线往上挪"; color="#3fb950"; emoji="📈";
+      why="赚 <strong>+"+ret_pct.toFixed(1)+"%</strong>，现在是把『亏损保险』上调的好时机。**让赚的钱不再可能变回亏的钱**。";
+      actions=["把止损单从原来的 $"+(pb?pb.initial_stop_price:(entry*0.92).toFixed(2))+" 上移到 <strong>$"+(entry*1.05).toFixed(2)+"</strong>（保证最差也赚 +5%）",
+               "继续持有等更大涨幅"];
+      warn="如果你的券商不支持挂止损单，至少在心里记住这个价位，跌到就立刻手动卖";
+    }
+    else if(ret_pct>=-3){
+      title="✓ 继续持有，啥都不用做"; color="#3fb950"; emoji="⏳";
+      why="买入价 $"+entry.toFixed(2)+"，当前 $"+curr.toFixed(2)+"，波动正常范围内。**新仓需要时间发酵**。";
+      const stopP=pb?pb.initial_stop_price:(entry*0.92);
+      actions=["确保止损单挂在 <strong>$"+stopP.toFixed(2)+"</strong>（最多亏 ~8%）",
+               "等 1-2 周看看趋势"];
+      // 是否到下一批加仓点
+      if(pb && pb.entry_plan && held.batches){
+        const used=held.batches.length;
+        if(used<pb.entry_plan.length){
+          const next=pb.entry_plan[used];
+          if(curr>=next.price*0.99){
+            actions.unshift("🎯 已经涨到加仓点 $"+next.price+"：再买 <strong>"+next.shares+" 股</strong>");
+            title="➕ 该加仓了 (Step "+next.step+"/3)";
+            why+=" 而且现在涨到了你计划好的第 "+next.step+" 批加仓点。";
+          }
+        }
+      }
+      warn="";
+    }
+    else{
+      title="⚠️ 接近止损线，盯紧"; color="#f39c12"; emoji="👀";
+      const stopP=pb?pb.initial_stop_price:(entry*0.92);
+      const space=((curr-stopP)/curr*100);
+      why="亏 "+ret_pct.toFixed(1)+"%，还离止损线 $"+stopP.toFixed(2)+" 还有 "+space.toFixed(1)+"% 缓冲空间。**不要因为心痛就提前清仓，但跌到止损线绝不能犹豫**。";
+      actions=["确认止损单挂在 <strong>$"+stopP.toFixed(2)+"</strong>",
+               "如果跌穿，按规则全部卖出"];
+      warn="心理战：浮亏看着难受，但只要没跌穿止损线就别动。统计上一半的亏单最终会回来";
+    }
+    return '<div style="background:linear-gradient(135deg,'+color+'22,'+color+'08);border-left:4px solid '+color+';border-radius:6px;padding:14px;margin-top:12px">'+
+      '<div style="font-size:16px;font-weight:700;color:'+color+';margin-bottom:8px">'+emoji+' '+title+'</div>'+
+      '<div style="color:#c9d1d9;font-size:13px;line-height:1.7;margin-bottom:10px">'+why+'</div>'+
+      '<div style="background:#0d1218;padding:10px;border-radius:4px"><strong style="color:#fff;font-size:12px">具体怎么做：</strong><ol style="margin:6px 0 0 22px;color:#e6edf3;font-size:13px;line-height:1.8">'+
+      actions.map(a=>'<li>'+a+'</li>').join('')+'</ol></div>'+
+      (warn?'<div style="color:#f39c12;font-size:11.5px;margin-top:8px">💭 '+warn+'</div>':'')+
+      '</div>';
+  }
+  // ====== 未持仓分支 ======
+  const action=r.action||'AVOID';
+  const verdict={
+    STRONG_BUY:{emoji:'🔥',title:'强烈建议买入',color:'#d63031',short:'系统认为这是这周最好的几只之一'},
+    BUY:       {emoji:'🟢',title:'值得买入',color:'#3fb950',short:'综合评分过线，可以入场'},
+    TRY_BUY:   {emoji:'🟡',title:'可以试一下',color:'#f1c40f',short:'信号偏弱，小仓试水，错了不痛'},
+    WATCH:     {emoji:'👀',title:'再观望一下',color:'#8b949e',short:'当前价位/趋势不够好，等等'},
+    AVOID:     {emoji:'⚪',title:'不要碰',color:'#8b949e',short:'分数太低，机会成本太大'}
+  }[action]||{emoji:'?',title:action,color:'#8b949e',short:''};
+
+  // why in plain language
+  let why=verdict.short+'（系统打分 <strong>'+conv+'/100</strong>）。';
+  const tags=(r.framework_tags||[]).map(t=>t.code);
+  if(r.is_priority)why='🔥 这只是今日 PRIORITY #'+r.priority_rank+' — 系统从 113 只里挑出的 Top 8 之一。';
+  else if(tags.includes('6M'))why+=' 关键加分点：过去 6 个月每月平均涨幅超 3%（长期动量强）。';
+
+  if(action==='AVOID'||action==='WATCH'){
+    return '<div style="background:linear-gradient(135deg,'+verdict.color+'22,'+verdict.color+'08);border-left:4px solid '+verdict.color+';border-radius:6px;padding:14px;margin-top:12px">'+
+      '<div style="font-size:16px;font-weight:700;color:'+verdict.color+';margin-bottom:8px">'+verdict.emoji+' '+verdict.title+'</div>'+
+      '<div style="color:#c9d1d9;font-size:13px;line-height:1.7">'+why+' 等到分数 ≥ 58 (TRY_BUY) 再考虑。</div>'+
+      '</div>';
+  }
+  // Buy advice
+  if(!pb)return '<div style="padding:14px;color:#8b949e">建议生成失败，请刷新</div>';
+  const stop_pct=((pb.initial_stop_price-curr)/curr*100);
+  const target1_pct=((pb.profit_taking[0].target_price-curr)/curr*100);
+  const target2_pct=((pb.profit_taking[1].target_price-curr)/curr*100);
+
+  return '<div style="background:linear-gradient(135deg,'+verdict.color+'22,'+verdict.color+'08);border-left:4px solid '+verdict.color+';border-radius:6px;padding:14px;margin-top:12px">'+
+    '<div style="font-size:16px;font-weight:700;color:'+verdict.color+';margin-bottom:8px">'+verdict.emoji+' '+verdict.title+'</div>'+
+    '<div style="color:#c9d1d9;font-size:13px;line-height:1.7;margin-bottom:12px">'+why+'</div>'+
+
+    '<div style="background:#0d1218;padding:10px;border-radius:4px;margin-bottom:10px">'+
+    '<strong style="color:#fff;font-size:12px">💰 怎么买（分 3 次，安全做法）</strong>'+
+    '<ol style="margin:6px 0 0 22px;color:#e6edf3;font-size:13px;line-height:1.8">'+
+    '<li><strong>现在立刻买</strong> '+pb.entry_plan[0].shares+' 股 ≈ $'+pb.entry_plan[0].cash+'（建议用市价单）</li>'+
+    '<li>如果<strong>涨到 $'+pb.entry_plan[1].price+'</strong>（+3%）再买 '+pb.entry_plan[1].shares+' 股</li>'+
+    '<li>如果<strong>再涨到 $'+pb.entry_plan[2].price+'</strong>（突破近 4 周高点）买最后 '+pb.entry_plan[2].shares+' 股</li>'+
+    '</ol>'+
+    '<p style="color:#8b949e;font-size:11px;margin-top:6px">总共会花掉 <strong style="color:#fff">$'+pb.target_cash_usd+'</strong>（你 $20K 仓位的 '+pb.target_position_pct+'%）。<br>分批是因为：万一刚买就跌，你只亏 1/3 不是全部。</p>'+
+    '</div>'+
+
+    '<div style="background:#0d1218;padding:10px;border-radius:4px;margin-bottom:10px">'+
+    '<strong style="color:#fff;font-size:12px">🛑 什么时候卖（看到价位就执行，不要犹豫）</strong>'+
+    '<ol style="margin:6px 0 0 22px;color:#e6edf3;font-size:13px;line-height:1.8">'+
+    '<li style="color:#ff7676"><strong>跌到 $'+pb.initial_stop_price+'</strong>（'+stop_pct.toFixed(1)+'%）→ <strong>全部卖出，止损</strong>（最坏亏 $'+pb.single_trade_risk_usd+'，相当于你 '+pb.single_trade_risk_pct+'% 资金）</li>'+
+    '<li><strong>涨到 $'+pb.profit_taking[0].target_price+'</strong>（+'+target1_pct.toFixed(1)+'%）→ 卖 1/4 锁部分利润</li>'+
+    '<li><strong>涨到 $'+pb.profit_taking[1].target_price+'</strong>（+'+target2_pct.toFixed(1)+'%）→ 再卖 1/3</li>'+
+    '<li>剩下的"骑趋势" — 一直拿到系统分数跌破 45 再考虑清仓</li>'+
+    '</ol>'+
+    '</div>'+
+
+    '<div style="font-size:11.5px;color:#8b949e">💭 <strong>核心心法</strong>：买入前先把止损价 $'+pb.initial_stop_price+' 记在便签上。涨了开心，跌到这个数立刻卖 — 不许找借口。</div>'+
+    '</div>';
+}
+
 function renderDetail(r){
   const am=(data.action_meta&&data.action_meta[r.action])||{emoji:"",label:r.action||"-",color:"#8b949e"};
+  let friendlyHtml='';
+  try{ friendlyHtml=renderFriendlyAdvice(r); }catch(e){ friendlyHtml='<div style="color:#f39c12">建议渲染失败: '+e.message+'</div>'; }
   let pbHtml='';
   try{ pbHtml=typeof renderPlaybook==='function'?renderPlaybook(r):''; }catch(e){ pbHtml=''; }
   return '<tr class="detail"><td colspan="16">'+
-    '<div class="detail-grid"><div>'+
+    friendlyHtml+
+    '<details style="margin-top:14px"><summary style="color:#58a6ff;cursor:pointer;font-size:12px;padding:6px 0">📊 查看技术细节 (Conviction 三轴 / 公司逻辑 / 完整操作手册)</summary>'+
+    '<div class="detail-grid" style="margin-top:10px"><div>'+
     "<h4>核心逻辑/催化剂</h4>"+
     '<p><span class="label">逻辑</span>'+(r.logic||"-")+"</p>"+
     '<p><span class="label">催化</span>'+(r.catalyst||"-")+"</p>"+
@@ -372,14 +509,16 @@ function renderDetail(r){
     "</div><div>"+
     '<h4>📌 操作建议 ('+am.emoji+" "+am.label+')</h4>'+
     '<p style="font-size:14px"><span class="label">动作</span><strong style="color:'+am.color+'">'+am.emoji+" "+am.label+'</strong> · <span class="size-tag">'+(r.size_class||"-")+'</span> · <span class="horizon-tag">'+(r.holding_horizon||"-")+" "+(r.horizon_days||"")+"</span></p>"+
-    '<p><span class="label">ATR(20)</span>$'+fmt(r.atr_20)+" ("+fmt(r.atr_pct,"%")+" 日波动)</p>"+
-    "<h4 style=\"margin-top:12px\">置信度三轴</h4>"+
-    '<p><span class="label">趋势强度 TS</span><strong>'+(r.trend_strength||"-")+"</strong> / 100</p>"+
-    "<p><span class=\"label\">入场质量 EQ</span><strong>"+(r.entry_quality||"-")+"</strong> / 100</p>"+
-    '<p><span class="label">基本面 FC</span><strong>'+(r.fund_conviction||"-")+"</strong> / 100</p>"+
-    "<p><span class=\"label\">Regime 改正</span>×"+(r.regime_modifier||"-")+" "+(data.regime_label||"")+"</p>"+
-    "<p style=\"font-size:13px;margin-top:8px\"><span class=\"label\">→ 置信度</span><strong style=\"color:"+convColor(r.conviction_score||0)+";font-size:18px\">"+fmt(r.conviction_score,"",1)+"</strong> / 100</p>"+
-    "</div></div>"+pbHtml+"</td></tr>";
+    '<p><span class="label">ATR(20) 正常波幅</span>$'+fmt(r.atr_20)+" ("+fmt(r.atr_pct,"%")+" 日波动)</p>"+
+    "<h4 style=\"margin-top:12px\">置信度三轴 (满分100)</h4>"+
+    '<p><span class="label">趋势强度 TS</span><strong>'+(r.trend_strength||"-")+"</strong> / 100 <span style=\"color:#8b949e;font-size:10px\">(均线+距高+RS+月均动量)</span></p>"+
+    "<p><span class=\"label\">入场质量 EQ</span><strong>"+(r.entry_quality||"-")+"</strong> / 100 <span style=\"color:#8b949e;font-size:10px\">(周涨甜区+量能+不追高)</span></p>"+
+    '<p><span class="label">基本面 FC</span><strong>'+(r.fund_conviction||"-")+"</strong> / 100 <span style=\"color:#8b949e;font-size:10px\">(★评级+龙头/二线+层级)</span></p>"+
+    "<p><span class=\"label\">Regime 大盘环境</span>×"+(r.regime_modifier||"-")+" "+(data.regime_label||"")+"</p>"+
+    "<p style=\"font-size:13px;margin-top:8px\"><span class=\"label\">→ 综合置信度</span><strong style=\"color:"+convColor(r.conviction_score||0)+";font-size:18px\">"+fmt(r.conviction_score,"",1)+"</strong> / 100</p>"+
+    "</div></div>"+pbHtml+
+    "</details>"+
+    "</td></tr>";
 }
 
 function render(){
@@ -446,40 +585,61 @@ function promptBuy(ticker, price){
   alert("✓ 已记录买入 "+ticker+" "+shares+" 股 @ $"+px);
 }
 
+
 function determineNextAction(held, r){
   if(!r||r.latest_price==null)return {action:"等待数据",color:"#8b949e",detail:"-"};
   const ret_pct=(r.latest_price/held.buy_price-1)*100;
-  // Check exit triggers first
-  if(r.conviction_score<45)return {action:"⚠️ 减半仓",color:"#f39c12",detail:"Conviction "+r.conviction_score+" < 45"};
+  if(r.conviction_score<45)return {action:"⚠️ 减半仓",color:"#f39c12",detail:"分数 "+r.conviction_score+" < 45 警戒线"};
   if(r.suggested_stop_price && r.latest_price<=r.suggested_stop_price)return {action:"🛑 触发止损",color:"#d63031",detail:"价 $"+r.latest_price+" ≤ 止损 $"+r.suggested_stop_price};
   if(r.action==="AVOID")return {action:"🚪 全清",color:"#d63031",detail:"信号转为 AVOID"};
-  // Stop ladder updates
   const pb=r.playbook;
   if(pb){
-    for(const s of pb.stop_ladder.slice().reverse()){
+    for(const s of (pb.stop_ladder||[]).slice().reverse()){
       if(ret_pct>=s.after_gain_pct && s.stop_price){
-        // suggest stop update
-        return {action:"⬆️ 上调止损至 $"+s.stop_price,color:"#58a6ff",detail:"涨幅 "+ret_pct.toFixed(1)+"% (覆盖 "+s.after_gain_pct+"% 档)"};
+        return {action:"⬆️ 上调止损 $"+s.stop_price,color:"#58a6ff",detail:"涨幅 "+ret_pct.toFixed(1)+"% (覆盖 "+s.after_gain_pct+"% 档)"};
       }
     }
-    // Check profit taking
-    for(const pt of pb.profit_taking.slice().reverse()){
+    for(const pt of (pb.profit_taking||[]).slice().reverse()){
       if(r.latest_price>=pt.target_price && pt.shares_to_sell>0){
-        return {action:"💰 减仓 "+pt.shares_to_sell+" 股",color:"#3fb950",detail:"+"+pt.r_multiple+"R 达成 (+"+pt.gain_pct+"%)"};
+        return {action:"💰 减仓 "+pt.shares_to_sell+" 股",color:"#3fb950",detail:"+"+pt.r_multiple+"R 达成"};
       }
     }
-    // Check if should add (still has entry batches left)
-    if(held.batches && held.batches.length<pb.entry_plan.length){
-      const nextBatch=pb.entry_plan[held.batches.length];
-      if(nextBatch&&r.latest_price>=nextBatch.price){
-        return {action:"➕ 加仓 Step "+nextBatch.step,color:"#3fb950",detail:"已到 $"+nextBatch.price+" 触发价 — 加 "+nextBatch.shares+" 股"};
+    if(held.batches && held.batches.length<(pb.entry_plan||[]).length){
+      const next=pb.entry_plan[held.batches.length];
+      if(next && r.latest_price>=next.price){
+        return {action:"➕ 加仓 Step "+next.step,color:"#3fb950",detail:"到加仓点 $"+next.price};
       }
     }
   }
-  if(ret_pct>0)return {action:"✓ 持有",color:"#3fb950",detail:"+"+ret_pct.toFixed(1)+"% 趋势中"};
-  return {action:"✓ 持有",color:"#8b949e",detail:ret_pct.toFixed(1)+"% — 等待信号"};
+  if(ret_pct>0)return {action:"✓ 持有",color:"#3fb950",detail:"+"+ret_pct.toFixed(1)+"%"};
+  return {action:"✓ 持有",color:"#8b949e",detail:ret_pct.toFixed(1)+"%"};
 }
 
+function renderPlaybook(r){
+  const pb=r.playbook;
+  if(!pb)return '<div style="padding:14px;color:#8b949e">⚪ 当前 '+(r.action||'-')+', 暂无 playbook (仅 TRY_BUY+ 生成)</div>';
+  const cash=(data.portfolio_config&&data.portfolio_config.portfolio_cash_usd)||20000;
+  let html='<div style="background:#0d1218;border:1px solid #d63031;border-radius:8px;padding:14px;margin-top:14px">';
+  html+='<h4 style="color:#ff6b6b;font-size:13px;margin-bottom:10px">📋 完整操作手册 (基于 $'+cash+')</h4>';
+  html+='<div style="background:rgba(214,48,49,0.08);padding:10px;border-radius:5px;margin-bottom:12px"><strong>'+pb.summary+'</strong><br><span style="color:#8b949e;font-size:11px">总投入 $'+pb.target_cash_usd+' · '+pb.target_shares+' 股 · 单笔风险 $'+pb.single_trade_risk_usd+' ('+pb.single_trade_risk_pct+'%)</span></div>';
+  // Entry plan
+  html+='<strong style="color:#3fb950">📥 建仓 (3 批递进)</strong>';
+  html+='<table style="width:100%;font-size:11px;margin-top:6px"><thead><tr style="background:#1a1f26"><th style="padding:5px 8px">#</th><th style="padding:5px 8px;text-align:left">触发条件</th><th class="num" style="padding:5px 8px">价格</th><th class="num" style="padding:5px 8px">股数</th></tr></thead><tbody>';
+  for(const e of (pb.entry_plan||[]))html+='<tr><td style="padding:5px 8px;color:#3fb950">'+e.step+'</td><td style="padding:5px 8px">'+e.trigger+'</td><td class="num" style="padding:5px 8px">$'+fmt(e.price)+'</td><td class="num" style="padding:5px 8px">'+e.shares+'</td></tr>';
+  html+='</tbody></table>';
+  // Stop ladder
+  html+='<strong style="color:#f39c12;display:block;margin-top:10px">🛡 移动止损</strong>';
+  html+='<table style="width:100%;font-size:11px;margin-top:6px"><thead><tr style="background:#1a1f26"><th style="padding:5px 8px">涨幅</th><th class="num" style="padding:5px 8px">止损线</th><th style="padding:5px 8px">说明</th></tr></thead><tbody>';
+  for(const s of (pb.stop_ladder||[]))html+='<tr><td style="padding:5px 8px">+'+s.after_gain_pct+'%</td><td class="num down" style="padding:5px 8px">'+(s.stop_price?'$'+fmt(s.stop_price):'动态')+'</td><td style="padding:5px 8px;color:#8b949e">'+s.desc+'</td></tr>';
+  html+='</tbody></table>';
+  // Profit
+  html+='<strong style="color:#d63031;display:block;margin-top:10px">💰 阶梯减仓</strong>';
+  html+='<table style="width:100%;font-size:11px;margin-top:6px"><thead><tr style="background:#1a1f26"><th style="padding:5px 8px">+R</th><th class="num" style="padding:5px 8px">目标价</th><th class="num" style="padding:5px 8px">卖出</th><th style="padding:5px 8px">说明</th></tr></thead><tbody>';
+  for(const p of (pb.profit_taking||[]))html+='<tr><td style="padding:5px 8px">+'+p.r_multiple+'R</td><td class="num up" style="padding:5px 8px">$'+fmt(p.target_price)+'</td><td class="num" style="padding:5px 8px">'+p.shares_to_sell+'</td><td style="padding:5px 8px;color:#8b949e">'+p.desc+'</td></tr>';
+  html+='</tbody></table>';
+  html+='</div>';
+  return html;
+}
 
 function renderPortfolioView(){
   const pf=pfLoadSync();
@@ -487,7 +647,7 @@ function renderPortfolioView(){
   const config=(data&&data.portfolio_config)||{};
   const totalCash=config.portfolio_cash_usd||20000;
   if(tickers.length===0){
-    document.getElementById('pf-content').innerHTML='<div class="empty-bt"><h3 style="color:#fff;margin-bottom:14px">💼 我的持仓</h3><p>还没有持仓记录</p><p style="margin-top:8px;color:#8b949e">在主表点击任一行的 📌 买入 按钮记录你的实际成交</p><p style="margin-top:14px;font-size:11px">配置: 总仓 $'+totalCash+' · 最多 '+(config.max_positions||10)+' 只 · 单笔风险 '+(config.risk_per_trade_pct||1.5)+'%</p></div>';
+    document.getElementById('pf-content').innerHTML='<div class="empty-bt"><h3 style="color:#fff;margin-bottom:14px">💼 我的持仓</h3><p>还没有持仓记录</p><p style="margin-top:8px;color:#8b949e">在主表点击任一行的 📌 买入 按钮</p></div>';
     return;
   }
   let totalCost=0,totalValue=0;
@@ -503,60 +663,22 @@ function renderPortfolioView(){
   }
   rows.sort((a,b)=>b.val-a.val);
   const totalRet=totalCost>0?(totalValue/totalCost-1)*100:0;
-  const cashLeft=totalCash-totalCost;
-  const exposure=totalCost/totalCash*100;
 
   let html='<div style="padding:0 20px 20px"><h3 style="color:#fff;margin-bottom:10px">💼 我的持仓 ('+tickers.length+'/'+(config.max_positions||10)+')</h3>';
   html+='<div class="backtest-grid">';
   html+='<div class="stat"><div class="label">已投入</div><div class="value">$'+totalCost.toFixed(0)+'</div></div>';
   html+='<div class="stat"><div class="label">当前市值</div><div class="value '+(totalRet>=0?"up":"down")+'">$'+totalValue.toFixed(0)+'</div></div>';
   html+='<div class="stat"><div class="label">总浮盈</div><div class="value '+(totalRet>=0?"up":"down")+'">'+(totalRet>=0?"+":"")+totalRet.toFixed(2)+'%</div></div>';
-  html+='<div class="stat"><div class="label">现金剩余</div><div class="value">$'+cashLeft.toFixed(0)+'</div></div>';
-  html+='<div class="stat"><div class="label">仓位占用</div><div class="value">'+exposure.toFixed(0)+'%</div></div>';
-  html+='<div class="stat"><div class="label">可继续买入</div><div class="value">'+((config.max_positions||10)-tickers.length)+' 只</div></div>';
+  html+='<div class="stat"><div class="label">现金剩余</div><div class="value">$'+(totalCash-totalCost).toFixed(0)+'</div></div>';
   html+='</div>';
-
-  html+='<div class="chart-wrap"><h3>每只持仓 — 下一步操作建议</h3>';
-  html+='<table style="width:100%;font-size:11.5px"><thead><tr style="background:#1a1f26">';
-  html+='<th style="padding:8px">Ticker</th><th style="padding:8px">买入价</th><th class="num" style="padding:8px">股数</th><th class="num" style="padding:8px">成本</th><th class="num" style="padding:8px">现价</th><th class="num" style="padding:8px">浮盈</th><th class="num" style="padding:8px">Conv</th><th style="padding:8px">📍 下一步</th><th style="padding:8px">操作</th>';
-  html+='</tr></thead><tbody>';
+  html+='<div class="chart-wrap"><h3>每只持仓 — 下一步建议</h3><table style="width:100%;font-size:11.5px"><thead><tr style="background:#1a1f26"><th style="padding:8px">Ticker</th><th style="padding:8px">买入价</th><th class="num" style="padding:8px">股数</th><th class="num" style="padding:8px">现价</th><th class="num" style="padding:8px">浮盈</th><th class="num" style="padding:8px">Conv</th><th style="padding:8px">📍 下一步</th></tr></thead><tbody>';
   for(const x of rows){
     const next=x.r?determineNextAction(x.h,x.r):{action:"-",color:"#8b949e",detail:""};
     const retCls=x.ret>=0?"up":"down";
-    html+='<tr style="border-bottom:1px solid #21262d">';
-    html+='<td style="padding:8px"><span class="ticker">'+x.h.ticker+'</span></td>';
-    html+='<td style="padding:8px" class="num">$'+x.h.buy_price.toFixed(2)+'</td>';
-    html+='<td class="num" style="padding:8px">'+x.h.shares+'</td>';
-    html+='<td class="num" style="padding:8px">$'+x.cost.toFixed(0)+'</td>';
-    html+='<td class="num" style="padding:8px">$'+x.px.toFixed(2)+'</td>';
-    html+='<td class="num '+retCls+'" style="padding:8px"><strong>'+(x.ret>=0?"+":"")+x.ret.toFixed(2)+'%</strong></td>';
-    html+='<td class="num" style="padding:8px">'+(x.r?x.r.conviction_score:"-")+'</td>';
-    html+='<td style="padding:8px"><strong style="color:'+next.color+'">'+next.action+'</strong><br><span style="font-size:10px;color:#8b949e">'+next.detail+'</span></td>';
-    html+='<td style="padding:8px"><button onclick="event.stopPropagation();promptAddBatch(\''+x.h.ticker+'\','+(x.r?x.r.latest_price:x.h.buy_price)+')" style="background:#3fb950;color:#000;border:none;padding:3px 7px;border-radius:3px;font-size:10px;cursor:pointer;margin-right:3px">+</button>';
-    html+='<button onclick="event.stopPropagation();promptReduce(\''+x.h.ticker+'\')" style="background:#f39c12;color:#000;border:none;padding:3px 7px;border-radius:3px;font-size:10px;cursor:pointer;margin-right:3px">-</button>';
-    html+='<button onclick="event.stopPropagation();if(confirm(\'确认清仓 '+x.h.ticker+'?\')){pfRemove(\''+x.h.ticker+'\');renderPortfolioView();render();}" style="background:#d63031;color:#fff;border:none;padding:3px 7px;border-radius:3px;font-size:10px;cursor:pointer">x</button></td>';
-    html+='</tr>';
+    html+='<tr style="border-bottom:1px solid #21262d"><td style="padding:8px"><span class="ticker">'+x.h.ticker+'</span></td><td class="num" style="padding:8px">$'+x.h.buy_price.toFixed(2)+'</td><td class="num" style="padding:8px">'+x.h.shares+'</td><td class="num" style="padding:8px">$'+x.px.toFixed(2)+'</td><td class="num '+retCls+'" style="padding:8px"><strong>'+(x.ret>=0?"+":"")+x.ret.toFixed(2)+'%</strong></td><td class="num" style="padding:8px">'+(x.r?x.r.conviction_score:"-")+'</td><td style="padding:8px"><strong style="color:'+next.color+'">'+next.action+'</strong><br><span style="font-size:10px;color:#8b949e">'+next.detail+'</span></td></tr>';
   }
-  html+='</tbody></table></div>';
-  html+='</div>';
+  html+='</tbody></table></div></div>';
   document.getElementById('pf-content').innerHTML=html;
-}
-
-function promptAddBatch(ticker, price){
-  const shares=prompt("加仓 "+ticker+" 多少股?", "5");
-  if(!shares||isNaN(shares))return;
-  const px=parseFloat(prompt("成交价?", price.toFixed(2)));
-  if(isNaN(px))return;
-  pfAddBatch(ticker, px, parseInt(shares));
-  renderPortfolioView(); render();
-}
-function promptReduce(ticker){
-  const pf=pfLoadSync();
-  const h=pf[ticker]; if(!h)return;
-  const shares=prompt("减仓 "+ticker+" 多少股? (持有 "+h.shares+" 股)", Math.floor(h.shares/2).toString());
-  if(!shares||isNaN(shares))return;
-  pfUpdateShares(ticker, h.shares-parseInt(shares));
-  renderPortfolioView(); render();
 }
 
 // View-tab routing
@@ -573,16 +695,12 @@ document.querySelectorAll(".view-tab").forEach(b=>{
   });
 });
 
-// Backtest loader (minimal)
 let _btLoaded=false;
 async function loadBacktest(){
   if(_btLoaded)return;
   try{
     const r=await fetch((typeof apiBacktest!=="undefined"?apiBacktest:"../data/backtest_results.json")+"?_="+Date.now());
-    if(!r.ok){
-      document.getElementById("bt-content").innerHTML='<div class="empty-bt"><p>回测数据未生成</p><p><code>python scripts/bt_v34f.py</code></p></div>';
-      return;
-    }
+    if(!r.ok){document.getElementById("bt-content").innerHTML='<div class="empty-bt"><p>回测数据未生成</p><p><code>python scripts/bt_v36.py</code></p></div>';return;}
     const bt=await r.json();
     _btLoaded=true;
     const s=bt.summary||{};
@@ -597,27 +715,21 @@ async function loadBacktest(){
     h+=stat("周胜率",((s.win_rate||0)*100).toFixed(1)+"%");
     h+=stat("总周数",s.n_weeks||0);
     h+='</div>';
-    const labels={S1:"B&H SPY",S2:"6M-Mom Top3",S3:"Comp Top10",S4:"3-Gate+ATR",S5:"Conviction",S6:"★ S6 Hybrid"};
-    let rows="";
+    const labels={S1:"B&H SPY",S2:"6M-Mom Top3",S3:"Comp Top10",S4:"3-Gate+ATR",S5:"Conviction",S6:"★ S6 Hybrid+Stop"};
+    let rs="";
     for(const k of ["S1","S2","S3","S4","S5","S6"]){
       const m=s[k+"_metrics"]; if(!m)continue;
       const star=k==="S6"?' style="background:#1a3a1f;font-weight:600"':"";
-      rows+="<tr"+star+'><td style="padding:6px 12px">'+labels[k]+'</td>'+
-        '<td class="num '+cls(m.total_return||0)+'" style="padding:6px 12px">'+fp(m.total_return||0)+'</td>'+
-        '<td class="num" style="padding:6px 12px">'+(m.sharpe||0).toFixed(2)+'</td>'+
-        '<td class="num down" style="padding:6px 12px">'+((m.max_drawdown||0)*100).toFixed(2)+'%</td>'+
-        '<td class="num" style="padding:6px 12px">'+((m.win_rate||0)*100).toFixed(1)+'%</td></tr>';
+      rs+="<tr"+star+'><td style="padding:6px 12px">'+labels[k]+'</td><td class="num '+cls(m.total_return||0)+'" style="padding:6px 12px">'+fp(m.total_return||0)+'</td><td class="num" style="padding:6px 12px">'+(m.sharpe||0).toFixed(2)+'</td><td class="num down" style="padding:6px 12px">'+((m.max_drawdown||0)*100).toFixed(2)+'%</td><td class="num" style="padding:6px 12px">'+((m.win_rate||0)*100).toFixed(1)+'%</td></tr>';
     }
-    h+='<div class="chart-wrap"><h3>策略横评 (★ = 你的策略)</h3><table style="width:100%;font-size:12px"><thead style="background:#1a1f26"><tr><th style="padding:8px 12px;text-align:left">策略</th><th class="num" style="padding:8px 12px">收益</th><th class="num" style="padding:8px 12px">Sharpe</th><th class="num" style="padding:8px 12px">MaxDD</th><th class="num" style="padding:8px 12px">胜率</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    h+='<div class="chart-wrap"><h3>策略横评 (★ = 你的策略)</h3><table style="width:100%;font-size:12px"><thead style="background:#1a1f26"><tr><th style="padding:8px 12px;text-align:left">策略</th><th class="num" style="padding:8px 12px">收益</th><th class="num" style="padding:8px 12px">Sharpe</th><th class="num" style="padding:8px 12px">MaxDD</th><th class="num" style="padding:8px 12px">胜率</th></tr></thead><tbody>'+rs+'</tbody></table></div>';
     document.getElementById("bt-content").innerHTML=h;
-  }catch(e){
-    document.getElementById("bt-content").innerHTML='<div class="empty-bt">加载失败: '+e.message+'</div>';
-  }
+  }catch(e){document.getElementById("bt-content").innerHTML='<div class="empty-bt">加载失败: '+e.message+'</div>';}
 }
 
-// ====== Boot ======
+// Boot
 (async()=>{
-  await pfLoad();        // warm holdings cache before first render
+  await pfLoad();
   await refreshPortfolioCount();
   loadData();
 })();
