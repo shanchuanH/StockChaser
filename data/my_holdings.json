@@ -67,9 +67,7 @@
         "date": "2025-09-01"
       }
     ],
-    "category": "external",
-    "name": "Himax Technologies",
-    "_imported": "from Fidelity 2026-05-11 - Taiwan display IC"
+    "_imported": "from Fidelity 2026-05-11 - Taiwan display IC, promoted to AI universe"
   },
   "LSCC": {
     "ticker": "LSCC",
@@ -139,9 +137,7 @@
         "date": "2025-07-01"
       }
     ],
-    "category": "etf",
-    "name": "Roundhill Memory ETF",
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11 - memory ETF, promoted to AI universe"
   },
   "QQQM": {
     "ticker": "QQQM",

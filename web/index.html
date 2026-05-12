@@ -760,7 +760,7 @@ function renderPortfolioView(){
           : "📌 非 AI 链股票 · 仅追踪 P&L";
         html+='<div style="background:var(--bg2);border:1px solid #444;border-left:4px solid #8b949e;border-radius:8px;padding:12px;opacity:0.9">';
         html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">';
-        html+='<div style="min-width:0"><div style="font-size:16px;font-weight:700;color:#c9d1d9">'+c.t+'</div>';
+        html+='<div style="min-width:0"><div style="font-size:16px;font-weight:700;color:#c9d1d9">'+c.t+' <span style="font-size:13px;color:#58a6ff;font-weight:600">$'+c.px.toFixed(2)+'</span></div>';
         html+='<div style="font-size:10px;color:#8b949e;margin-top:2px">'+subtitle+'</div></div>';
         html+='<div style="text-align:right"><div class="num '+retCls+'" style="font-size:17px;font-weight:700">'+(c.ret>=0?"+":"")+c.ret.toFixed(2)+'%</div>';
         html+='<div style="font-size:10.5px;color:#8b949e">'+(c.val-c.cost>=0?"+":"")+'$'+(c.val-c.cost).toFixed(0)+'</div></div>';
@@ -780,7 +780,7 @@ function renderPortfolioView(){
         html+='<div style="background:var(--bg2);border:1px solid '+c.verb_color+'44;border-left:4px solid '+c.verb_color+';border-radius:8px;padding:14px">';
         // Header row: ticker + layer | strategy badge | P&L
         html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px">';
-        html+='<div style="min-width:0"><div style="font-size:18px;font-weight:700;color:#58a6ff">'+c.t+'</div>';
+        html+='<div style="min-width:0"><div style="font-size:18px;font-weight:700;color:#58a6ff">'+c.t+' <span style="font-size:14px;color:#c9d1d9;font-weight:600">$'+c.px.toFixed(2)+'</span></div>';
         html+='<div style="font-size:10px;color:#8b949e;margin-top:2px">'+(c.r?c.r.layer:"-")+'</div></div>';
         html+='<div style="text-align:center;font-size:10px;color:#8b949e">';
         if(isPri)html+='<div style="background:linear-gradient(135deg,#ff4757,#d63031);color:#fff;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;margin-bottom:2px">🔥 #'+c.r.priority_rank+'</div>';
@@ -1005,3 +1005,4 @@ setInterval(()=>{if(document.getElementById("view-dashboard").classList.contains
 setInterval(()=>{if(data){const e=document.getElementById("last-updated");if(e&&e.textContent.indexOf("更新于")===0)e.textContent="更新于 "+fmtAgo(data.generated_at);}},30000);
 </script>
 </body>
+</html>

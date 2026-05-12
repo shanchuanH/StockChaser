@@ -45,7 +45,17 @@ SEED_ALWAYS_REFRESH = {
     # the version from the first deploy.
     "backtest_results.json",
     "conviction_history.json",
+    # Universe config — when we add/remove AI-chain tickers (HIMX, DRAM…),
+    # the new seed in git must override the cached disk copy. This is pure
+    # config, never user-edited on the server.
+    "universe.json",
 }
+
+# Fields we reconcile from seed → disk on every cold start (preserves
+# user-edited fields like shares/buy_price/buy_date/batches).
+# Used by SEED_MERGE_NEW_KEYS handler to handle "promote ETF to AI chain"
+# (= remove category) and similar metadata flips.
+SEED_RECONCILE_FIELDS = {"category", "name"}
 
 # Files that should MERGE new entries from seed but never overwrite
 # existing user-edited entries on disk.
@@ -58,7 +68,18 @@ SEED_MERGE_NEW_KEYS = {
 
 
 def _merge_dict_new_keys(seed_path, disk_path):
-    """Add keys from seed JSON that don't exist on disk; leave existing alone."""
+    """Reconcile seed JSON → disk JSON.
+
+    Two operations on every cold start:
+      (a) Add keys from seed that don't exist on disk (e.g. new positions).
+      (b) For keys that DO exist, sync only the fields listed in
+          SEED_RECONCILE_FIELDS ({category, name}) — so a "promote ETF to
+          AI chain" change in git (= seed removes category) actually
+          propagates to the persistent disk.
+
+    Never touches user-edited fields like shares, buy_price, buy_date,
+    batches — those stay exactly as the user last edited them.
+    """
     import shutil
     try:
         seed = json.loads(seed_path.read_text(encoding="utf-8"))
@@ -70,16 +91,49 @@ def _merge_dict_new_keys(seed_path, disk_path):
         disk = json.loads(disk_path.read_text(encoding="utf-8"))
         if not isinstance(disk, dict):
             return False, "disk is not a dict"
+
         added = [k for k in seed if k not in disk]
-        if not added:
-            return False, "no new keys to merge"
         for k in added:
             disk[k] = seed[k]
+
+        # (b) Reconcile config-like fields on EXISTING entries.
+        reconciled = []
+        for k in seed:
+            if k not in disk or k in added:
+                continue
+            if not isinstance(disk[k], dict) or not isinstance(seed[k], dict):
+                continue
+            changed = []
+            for field in SEED_RECONCILE_FIELDS:
+                seed_has = field in seed[k]
+                disk_has = field in disk[k]
+                if seed_has and not disk_has:
+                    disk[k][field] = seed[k][field]
+                    changed.append(f"+{field}")
+                elif disk_has and not seed_has:
+                    # Seed removed this field → propagate the removal
+                    # (e.g. category dropped to promote ETF to AI chain)
+                    del disk[k][field]
+                    changed.append(f"-{field}")
+                elif seed_has and disk_has and seed[k][field] != disk[k][field]:
+                    disk[k][field] = seed[k][field]
+                    changed.append(f"~{field}")
+            if changed:
+                reconciled.append(f"{k}({','.join(changed)})")
+
+        if not added and not reconciled:
+            return False, "no new keys, no reconciliation needed"
+
         disk_path.write_text(
             json.dumps(disk, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        return True, f"merged {len(added)} new entries: {', '.join(added)}"
+        parts = []
+        if added:
+            parts.append(f"+{len(added)} new: {', '.join(added)}")
+        if reconciled:
+            parts.append(f"reconcile: {', '.join(reconciled)}")
+        return True, "; ".join(parts)
     except Exception as exc:
         return False, str(exc)
 

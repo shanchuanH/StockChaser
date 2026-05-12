@@ -1467,5 +1467,31 @@
     "catalyst": "半导体材料营收",
     "cn_pair": "—",
     "risk": "周期"
+  },
+  {
+    "ticker": "HIMX",
+    "name": "Himax Technologies",
+    "layer": "L9·半导体底座",
+    "subsector": "显示驱动 IC + AI 眼镜 LCOS",
+    "role": "卫星",
+    "potential": 3,
+    "strategy": "题材交易",
+    "logic": "Meta Ray-Ban / AR 眼镜 LCOS 微显示供应；车载显示 IC 渐进；AI Glasses 出货爆发是催化剂",
+    "catalyst": "Meta / Google AR 眼镜出货放量；车载 OLED 驱动 IC 单价提升",
+    "cn_pair": "天德钰·京东方A",
+    "risk": "客户集中；面板周期；台股流动性"
+  },
+  {
+    "ticker": "DRAM",
+    "name": "Roundhill Memory ETF",
+    "layer": "L3·内存与存储",
+    "subsector": "存储芯片一篮子 (MU/SNDK/WDC...)",
+    "role": "ETF",
+    "potential": 3,
+    "strategy": "存储 Beta",
+    "logic": "HBM/DDR5 涨价周期；一揽子覆盖记忆体板块，回避单股选股风险",
+    "catalyst": "DRAM/HBM 合约价；MU/SNDK 财报",
+    "cn_pair": "长江存储·兆易创新",
+    "risk": "存储周期下行；ETF 成本"
   }
 ]
