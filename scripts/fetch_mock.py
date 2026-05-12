@@ -86,11 +86,16 @@ def main():
     spy_close = [r[5] for r in by_t["SPY"]]
     spy_4w = round((spy_close[-1] / spy_close[-21] - 1) * 100, 2)
     spy_above_50 = spy_close[-1] > sum(spy_close[-50:]) / 50
+    spy_above_200 = spy_close[-1] > (sum(spy_close[-200:]) / 200 if len(spy_close) >= 200 else sum(spy_close)/len(spy_close))
+    spy_sma200 = sum(spy_close[-200:]) / 200 if len(spy_close) >= 200 else sum(spy_close)/len(spy_close)
+    spy_dist_200 = round((spy_close[-1]/spy_sma200 - 1) * 100, 2)
 
     out = {
         "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "spy_4w_return_pct": spy_4w,
         "spy_above_sma50": spy_above_50,
+        "spy_above_sma200": spy_above_200,
+        "spy_dist_sma200_pct": spy_dist_200,
         "is_mock": True,
         "tickers": {},
     }

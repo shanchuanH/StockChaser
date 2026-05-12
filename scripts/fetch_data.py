@@ -78,15 +78,20 @@ def fetch():
     except Exception:
         print(f"  (no parquet engine — CSV only at {HIST.with_suffix('.csv').name})")
 
-    # SPY benchmark return
+    # SPY benchmark — used for regime detection
     spy_close = df["SPY"]["Close"].dropna()
     spy_ret_4w = float((spy_close.iloc[-1] / spy_close.iloc[-21] - 1) * 100) if len(spy_close) >= 21 else 0.0
     spy_above_sma50 = bool(spy_close.iloc[-1] > spy_close.iloc[-50:].mean()) if len(spy_close) >= 50 else False
+    # NEW v3.5: SMA200 is the bull/bear dividing line — used for kill switch
+    spy_above_sma200 = bool(spy_close.iloc[-1] > spy_close.iloc[-200:].mean()) if len(spy_close) >= 200 else True
+    spy_dist_sma200_pct = round(float((spy_close.iloc[-1] / spy_close.iloc[-200:].mean() - 1) * 100), 2) if len(spy_close) >= 200 else 0.0
 
     out = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "spy_4w_return_pct": round(spy_ret_4w, 2),
         "spy_above_sma50": spy_above_sma50,
+        "spy_above_sma200": spy_above_sma200,
+        "spy_dist_sma200_pct": spy_dist_sma200_pct,
         "is_mock": False,
         "tickers": {},
     }

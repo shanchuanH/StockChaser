@@ -209,6 +209,87 @@ def api_backtest():
     return Response(fp.read_text(encoding="utf-8"), mimetype="application/json")
 
 
+# ===== Portfolio Holdings API (server-side persistence) =====
+HOLDINGS_FILE = DATA / "my_holdings.json"
+_holdings_lock = threading.Lock()
+
+
+def _load_holdings():
+    if not HOLDINGS_FILE.exists():
+        return {}
+    try:
+        return json.loads(HOLDINGS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_holdings(d):
+    HOLDINGS_FILE.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+@app.route("/api/holdings", methods=["GET"])
+def api_holdings_get():
+    with _holdings_lock:
+        return jsonify(_load_holdings())
+
+
+@app.route("/api/holdings/upsert", methods=["POST"])
+def api_holdings_upsert():
+    body = request.get_json(force=True, silent=True) or {}
+    ticker = (body.get("ticker") or "").upper()
+    if not ticker:
+        return jsonify({"error": "ticker required"}), 400
+    shares = float(body.get("shares") or 0)
+    buy_price = float(body.get("buy_price") or 0)
+    buy_date = body.get("buy_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    with _holdings_lock:
+        pf = _load_holdings()
+        if ticker in pf:
+            # add batch — recalc weighted avg
+            old = pf[ticker]
+            total = old["shares"] + shares
+            new_avg = (old["buy_price"] * old["shares"] + buy_price * shares) / total if total > 0 else buy_price
+            old["shares"] = total
+            old["buy_price"] = round(new_avg, 2)
+            old.setdefault("batches", []).append({"price": buy_price, "shares": shares, "date": buy_date})
+        else:
+            pf[ticker] = {
+                "ticker": ticker, "shares": shares, "buy_price": buy_price, "buy_date": buy_date,
+                "batches": [{"price": buy_price, "shares": shares, "date": buy_date}],
+            }
+        _save_holdings(pf)
+        return jsonify({"ok": True, "holding": pf[ticker]})
+
+
+@app.route("/api/holdings/update_shares", methods=["POST"])
+def api_holdings_update_shares():
+    body = request.get_json(force=True, silent=True) or {}
+    ticker = (body.get("ticker") or "").upper()
+    shares = float(body.get("shares") or 0)
+    with _holdings_lock:
+        pf = _load_holdings()
+        if ticker not in pf:
+            return jsonify({"error": "not held"}), 404
+        if shares <= 0:
+            del pf[ticker]
+        else:
+            pf[ticker]["shares"] = shares
+        _save_holdings(pf)
+        return jsonify({"ok": True})
+
+
+@app.route("/api/holdings/remove", methods=["POST", "DELETE"])
+def api_holdings_remove():
+    body = request.get_json(force=True, silent=True) or {}
+    ticker = (body.get("ticker") or "").upper()
+    with _holdings_lock:
+        pf = _load_holdings()
+        if ticker in pf:
+            del pf[ticker]
+            _save_holdings(pf)
+        return jsonify({"ok": True})
+
+
 @app.route("/api/refresh", methods=["GET", "POST"])
 def api_refresh():
     use_mock = request.args.get("mock") == "1" or _USE_MOCK

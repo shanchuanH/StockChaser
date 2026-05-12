@@ -226,14 +226,30 @@ def detect_framework_tags(u, p, comp_score, conviction):
 
 
 def regime_modifier(prices_root):
+    """v3.5: SMA200 acts as hard bull/bear cap.
+
+    - SPY < SMA200 (bear regime)  → max 0.50 modifier, often 0.20-0.35
+    - SPY > SMA200 (bull regime)  → SMA50 nuances normally
+    """
     spy_above_50 = bool(prices_root.get("spy_above_sma50"))
+    # default True for back-compat when older signals.json lacks the field
+    spy_above_200 = bool(prices_root.get("spy_above_sma200", True))
     spy_4w = prices_root.get("spy_4w_return_pct") or 0
+    spy_dist_200 = prices_root.get("spy_dist_sma200_pct") or 0
+
+    # BEAR regime — hard cap
+    if not spy_above_200:
+        if spy_dist_200 < -10 or spy_4w < -8: return 0.20   # accelerating bear
+        if spy_4w < -3:                       return 0.30   # bear + falling
+        return 0.50                                          # bear but stable
+
+    # BULL regime — graded by SMA50 + momentum
     if spy_above_50 and spy_4w >= 4:    return 1.10
     if spy_above_50 and spy_4w >= 1:    return 1.00
     if spy_above_50:                     return 0.90
     if -3 <= spy_4w < 0:                 return 0.75
-    if spy_4w < -5:                      return 0.35
-    return 0.55
+    if spy_4w < -5:                      return 0.55
+    return 0.65
 
 
 def conviction_score(ts, eq, fc, rm):

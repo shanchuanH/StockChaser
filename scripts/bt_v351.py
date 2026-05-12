@@ -154,16 +154,62 @@ def compute_conviction(f, u, rm):
 
 
 def regime_modifier_for(spy_close, di):
+    """v3.5: SMA200 acts as bull/bear hard cap."""
     if di < 50:
         return 0.7
     spy_above_50 = spy_close[di] > sum(spy_close[di-49:di+1]) / 50
+    # SMA200 — bull/bear divider
+    if di >= 200:
+        sma200 = sum(spy_close[di-199:di+1]) / 200
+        spy_above_200 = spy_close[di] > sma200
+        dist_200 = (spy_close[di] / sma200 - 1) * 100
+    else:
+        spy_above_200 = True
+        dist_200 = 5.0
     spy_4w = (spy_close[di] / spy_close[di-21] - 1) * 100 if di >= 21 else 0
+
+    # BEAR — hard cap
+    if not spy_above_200:
+        if dist_200 < -10 or spy_4w < -8: return 0.20
+        if spy_4w < -3:                    return 0.30
+        return 0.50
+
+    # BULL — v3.5.1 restored cautious tiers from v3.4f
     if spy_above_50 and spy_4w >= 4: return 1.10
     if spy_above_50 and spy_4w >= 1: return 1.00
     if spy_above_50: return 0.90
     if -3 <= spy_4w < 0: return 0.70
-    if spy_4w < -5: return 0.30
+    if spy_4w < -5: return 0.30          # cautious during sharp dip
     return 0.55
+
+
+def regime_position_scale(spy_close, di):
+    """v3.5.1: position-size scaling based on regime.
+
+    Three regimes:
+      Bull (above SMA200 + healthy):   1.0x  full positions
+      Dip (above SMA200 but SMA50 broken + 4w<-3): 0.7x  caution
+      Bear (below SMA200):  0.3-0.5x   kill switch
+    """
+    if di < 200:
+        return 1.0
+    sma200 = sum(spy_close[di-199:di+1]) / 200
+    sma50 = sum(spy_close[di-49:di+1]) / 50 if di >= 50 else sma200
+    spy_4w = (spy_close[di] / spy_close[di-21] - 1) * 100 if di >= 21 else 0
+
+    # BEAR — below SMA200
+    if spy_close[di] < sma200:
+        dist = (spy_close[di] / sma200 - 1) * 100
+        if dist < -10: return 0.3   # deep bear → 30%
+        if dist < -5:  return 0.4   # mid bear  → 40%
+        return 0.5                   # mild break → 50%
+
+    # BULL — but SMA50 broken + sharp dip → dip protection
+    if spy_close[di] < sma50 and spy_4w < -3:
+        return 0.7  # 70% positions during bull-market correction
+
+    # Healthy bull
+    return 1.0
 
 
 def run():
@@ -419,10 +465,13 @@ def run():
             layer_count_s6[lk] = layer_count_s6.get(lk, 0) + 1
         # Step 3: assign tier weights by mom6m DESC
         kept.sort(key=lambda h: (-h.get("mom6m", 0), -h.get("conviction", 0)))
+        # v3.5: SMA200 kill switch — scale all weights when SPY < SMA200
+        pos_scale = regime_position_scale(spy_close, di)
         for tier_idx, h in enumerate(kept[:8]):
-            if tier_idx < 3: h["weight"] = 0.12
-            elif tier_idx < 6: h["weight"] = 0.08
-            else: h["weight"] = 0.04
+            if tier_idx < 3: base_w = 0.12
+            elif tier_idx < 6: base_w = 0.08
+            else: base_w = 0.04
+            h["weight"] = round(base_w * pos_scale, 4)
         holdings["S6"] = kept[:8]
 
         # Last week snapshot

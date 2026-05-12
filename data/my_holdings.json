@@ -1,0 +1,66 @@
+{
+  "AAOI": {
+    "ticker": "AAOI",
+    "shares": 30,
+    "buy_price": 180.06,
+    "buy_date": "2025-08-01",
+    "batches": [{"price": 180.06, "shares": 30, "date": "2025-08-01"}],
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "AMZN": {
+    "ticker": "AMZN",
+    "shares": 18,
+    "buy_price": 209.18,
+    "buy_date": "2024-08-01",
+    "batches": [{"price": 209.18, "shares": 18, "date": "2024-08-01"}],
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "ARM": {
+    "ticker": "ARM",
+    "shares": 20,
+    "buy_price": 211.15,
+    "buy_date": "2025-10-01",
+    "batches": [{"price": 211.15, "shares": 20, "date": "2025-10-01"}],
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "GOOGL": {
+    "ticker": "GOOGL",
+    "shares": 20,
+    "buy_price": 303.18,
+    "buy_date": "2025-04-01",
+    "batches": [{"price": 303.18, "shares": 20, "date": "2025-04-01"}],
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "LSCC": {
+    "ticker": "LSCC",
+    "shares": 20,
+    "buy_price": 127.19,
+    "buy_date": "2025-11-01",
+    "batches": [{"price": 127.19, "shares": 20, "date": "2025-11-01"}],
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "MSFT": {
+    "ticker": "MSFT",
+    "shares": 16.858,
+    "buy_price": 399.69,
+    "buy_date": "2025-06-01",
+    "batches": [{"price": 399.69, "shares": 16.858, "date": "2025-06-01"}],
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "QCOM": {
+    "ticker": "QCOM",
+    "shares": 40,
+    "buy_price": 221.00,
+    "buy_date": "2025-05-01",
+    "batches": [{"price": 221.00, "shares": 40, "date": "2025-05-01"}],
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "VRT": {
+    "ticker": "VRT",
+    "shares": 10,
+    "buy_price": 344.51,
+    "buy_date": "2025-09-01",
+    "batches": [{"price": 344.51, "shares": 10, "date": "2025-09-01"}],
+    "_imported": "from Fidelity 2026-05-11"
+  }
+}

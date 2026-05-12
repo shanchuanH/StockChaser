@@ -259,47 +259,94 @@ function renderRow(r,i){
     "</tr>";
 }
 
-// ========== 持仓追踪 (LocalStorage) ==========
+// ========== 持仓追踪 (server-side via /api/holdings, fallback localStorage) ==========
 const PF_KEY = "stockchaser_portfolio_v1";
-function pfLoad(){ try{ return JSON.parse(localStorage.getItem(PF_KEY)||"{}"); }catch(e){ return {}; } }
-function pfSave(p){ localStorage.setItem(PF_KEY, JSON.stringify(p)); refreshPortfolioCount(); }
-function refreshPortfolioCount(){
-  const pf=pfLoad();
-  const n=Object.keys(pf).length;
+const _useServerPF = isLocalServer; // true when running via serve.py
+let _pfCache = null;
+
+async function pfLoad(){
+  if(_useServerPF){
+    if(_pfCache)return _pfCache;
+    try{
+      const r=await fetch("/api/holdings");
+      if(r.ok){ _pfCache=await r.json(); return _pfCache; }
+    }catch(e){}
+    _pfCache={}; return _pfCache;
+  }
+  try{ return JSON.parse(localStorage.getItem(PF_KEY)||"{}"); }catch(e){ return {}; }
+}
+
+function pfLoadSync(){
+  // Synchronous helper for renderHoldingControl etc. that can't await.
+  // Returns the cached version, or empty {} if not loaded yet.
+  if(_useServerPF){
+    return _pfCache||{};
+  }
+  try{ return JSON.parse(localStorage.getItem(PF_KEY)||"{}"); }catch(e){ return {}; }
+}
+
+async function refreshPortfolioCount(){
+  const pf=await pfLoad();
   const el=document.getElementById('vt-portfolio-count');
-  if(el)el.textContent=n;
+  if(el)el.textContent=Object.keys(pf).length;
 }
-function pfAdd(ticker, price, shares){
-  const pf=pfLoad();
-  pf[ticker]={ticker, buy_price:price, shares, buy_date:new Date().toISOString().slice(0,10), batches:[{price,shares,date:new Date().toISOString().slice(0,10)}]};
-  pfSave(pf);
+
+async function pfAdd(ticker, price, shares){
+  if(_useServerPF){
+    try{
+      const r=await fetch("/api/holdings/upsert",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ticker,buy_price:price,shares})});
+      if(r.ok){ _pfCache=null; await pfLoad(); return; }
+    }catch(e){}
+  }
+  const pf=pfLoadSync();
+  pf[ticker]={ticker,buy_price:price,shares,buy_date:new Date().toISOString().slice(0,10),batches:[{price,shares,date:new Date().toISOString().slice(0,10)}]};
+  localStorage.setItem(PF_KEY,JSON.stringify(pf));
+  _pfCache=null;
+  await refreshPortfolioCount();
 }
-function pfAddBatch(ticker, price, shares){
-  const pf=pfLoad();
-  if(!pf[ticker]){ pfAdd(ticker, price, shares); return; }
+
+async function pfAddBatch(ticker, price, shares){
+  // Server-side upsert already does the weighted-avg merge
+  if(_useServerPF){
+    try{
+      const r=await fetch("/api/holdings/upsert",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ticker,buy_price:price,shares})});
+      if(r.ok){ _pfCache=null; await pfLoad(); return; }
+    }catch(e){}
+  }
+  const pf=pfLoadSync();
+  if(!pf[ticker]){ return pfAdd(ticker, price, shares); }
   const old=pf[ticker];
-  const total_shares=old.shares+shares;
-  const new_avg=(old.buy_price*old.shares+price*shares)/total_shares;
+  const total=old.shares+shares;
+  const new_avg=(old.buy_price*old.shares+price*shares)/total;
   old.buy_price=Math.round(new_avg*100)/100;
-  old.shares=total_shares;
-  old.batches.push({price,shares,date:new Date().toISOString().slice(0,10)});
-  pfSave(pf);
+  old.shares=total;
+  (old.batches||(old.batches=[])).push({price,shares,date:new Date().toISOString().slice(0,10)});
+  localStorage.setItem(PF_KEY,JSON.stringify(pf));
+  _pfCache=null;
+  await refreshPortfolioCount();
 }
-function pfRemove(ticker){
-  const pf=pfLoad();
-  delete pf[ticker];
-  pfSave(pf);
+
+async function pfRemove(ticker){
+  if(_useServerPF){
+    try{ await fetch("/api/holdings/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ticker})}); _pfCache=null; await pfLoad(); return; }catch(e){}
+  }
+  const pf=pfLoadSync(); delete pf[ticker];
+  localStorage.setItem(PF_KEY,JSON.stringify(pf));
+  _pfCache=null; await refreshPortfolioCount();
 }
-function pfUpdateShares(ticker, newShares){
-  const pf=pfLoad();
-  if(!pf[ticker])return;
-  if(newShares<=0){ pfRemove(ticker); return; }
-  pf[ticker].shares=newShares;
-  pfSave(pf);
+
+async function pfUpdateShares(ticker, newShares){
+  if(newShares<=0){ return pfRemove(ticker); }
+  if(_useServerPF){
+    try{ await fetch("/api/holdings/update_shares",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ticker,shares:newShares})}); _pfCache=null; await pfLoad(); return; }catch(e){}
+  }
+  const pf=pfLoadSync();
+  if(pf[ticker]){ pf[ticker].shares=newShares; localStorage.setItem(PF_KEY,JSON.stringify(pf)); }
+  _pfCache=null; await refreshPortfolioCount();
 }
 
 function renderHoldingControl(r){
-  const pf=pfLoad();
+  const pf=pfLoadSync();
   const held=pf[r.ticker];
   if(!held){
     return '<button onclick="event.stopPropagation();promptBuy(\''+r.ticker+'\','+r.latest_price+')" style="background:#3fb950;color:#000;border:none;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer">📌 买入</button>';
@@ -435,7 +482,7 @@ function determineNextAction(held, r){
 
 
 function renderPortfolioView(){
-  const pf=pfLoad();
+  const pf=pfLoadSync();
   const tickers=Object.keys(pf);
   const config=(data&&data.portfolio_config)||{};
   const totalCash=config.portfolio_cash_usd||20000;
@@ -504,7 +551,7 @@ function promptAddBatch(ticker, price){
   renderPortfolioView(); render();
 }
 function promptReduce(ticker){
-  const pf=pfLoad();
+  const pf=pfLoadSync();
   const h=pf[ticker]; if(!h)return;
   const shares=prompt("减仓 "+ticker+" 多少股? (持有 "+h.shares+" 股)", Math.floor(h.shares/2).toString());
   if(!shares||isNaN(shares))return;
@@ -550,7 +597,6 @@ async function loadBacktest(){
     h+=stat("周胜率",((s.win_rate||0)*100).toFixed(1)+"%");
     h+=stat("总周数",s.n_weeks||0);
     h+='</div>';
-    // 横评表
     const labels={S1:"B&H SPY",S2:"6M-Mom Top3",S3:"Comp Top10",S4:"3-Gate+ATR",S5:"Conviction",S6:"★ S6 Hybrid"};
     let rows="";
     for(const k of ["S1","S2","S3","S4","S5","S6"]){
@@ -569,9 +615,12 @@ async function loadBacktest(){
   }
 }
 
-// Boot
-refreshPortfolioCount();
-loadData();
+// ====== Boot ======
+(async()=>{
+  await pfLoad();        // warm holdings cache before first render
+  await refreshPortfolioCount();
+  loadData();
+})();
 setInterval(()=>{if(document.getElementById("view-dashboard").classList.contains("active"))loadData();},60000);
 setInterval(()=>{if(data){const e=document.getElementById("last-updated");if(e&&e.textContent.indexOf("更新于")===0)e.textContent="更新于 "+fmtAgo(data.generated_at);}},30000);
 </script>
