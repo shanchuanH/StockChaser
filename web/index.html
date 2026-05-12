@@ -645,7 +645,13 @@ function renderPortfolioView(){
     totalCost+=cost; totalValue+=val;
     const ret=(px/h.buy_price-1)*100;
     let verb="HOLD", verb_color="#58a6ff", action_text="✓ 持有", reason="";
-    if(r){
+    // External/ETF holdings — no AI strategy advice
+    if(h.category==="etf" || h.category==="external"){
+      action_text = h.category==="etf" ? "📊 ETF 防御层" : "📌 外部持仓";
+      reason = h.name || (h.category==="etf" ? "市场基准 ETF, 不参与 AI 链策略" : "非 AI 链股票, 仅追踪 P&L");
+      verb_color = "#8b949e";
+    }
+    else if(r){
       const conv=r.conviction_score||0;
       const pb=r.playbook;
       // Use user's actual entry-based stop (-8% from buy price)
@@ -709,10 +715,14 @@ function renderPortfolioView(){
   html+='<div class="stat" style="cursor:pointer" onclick="editAccountTotal()" title="点击编辑总账户金额"><div class="label">现金剩余 ✎</div><div class="value '+(realCashLeft>=0?"":"down")+'">$'+realCashLeft.toFixed(0)+'</div><div style="font-size:10px;color:#8b949e;margin-top:2px">总账户 $'+accountTotal.toFixed(0)+'</div></div>';
   html+='</div>';
 
+  // Separate external/ETF holdings — they don't get AI-chain strategy advice
+  const ai_cards = cards.filter(c => !(c.h.category==="etf" || c.h.category==="external"));
+  const external_cards = cards.filter(c => c.h.category==="etf" || c.h.category==="external");
   const groups=[
-    {key:"SELL",title:"🚨 需要立即操作",color:"#d63031",cards:cards.filter(c=>c.verb==="SELL")},
-    {key:"BUY",title:"📈 加仓机会",color:"#3fb950",cards:cards.filter(c=>c.verb==="BUY")},
-    {key:"HOLD",title:"✓ 继续持有",color:"#58a6ff",cards:cards.filter(c=>c.verb==="HOLD")}
+    {key:"SELL",title:"🚨 需要立即操作",color:"#d63031",cards:ai_cards.filter(c=>c.verb==="SELL")},
+    {key:"BUY",title:"📈 加仓机会",color:"#3fb950",cards:ai_cards.filter(c=>c.verb==="BUY")},
+    {key:"HOLD",title:"✓ AI 链持仓 (策略覆盖)",color:"#58a6ff",cards:ai_cards.filter(c=>c.verb==="HOLD")},
+    {key:"EXT",title:"📊 外部持仓 (ETF / 防御层 — 不参与策略)",color:"#8b949e",cards:external_cards}
   ];
 
   for(const g of groups){
@@ -739,60 +749,78 @@ function renderPortfolioView(){
         }
       }
 
-      html+='<div style="background:var(--bg2);border:1px solid '+c.verb_color+'44;border-left:4px solid '+c.verb_color+';border-radius:8px;padding:14px">';
-      // Header row: ticker + layer | strategy badge | P&L
-      html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px">';
-      html+='<div style="min-width:0"><div style="font-size:18px;font-weight:700;color:#58a6ff">'+c.t+'</div>';
-      html+='<div style="font-size:10px;color:#8b949e;margin-top:2px">'+(c.r?c.r.layer:"-")+'</div></div>';
-      // Strategy verdict (system score, not personal action)
-      html+='<div style="text-align:center;font-size:10px;color:#8b949e">';
-      if(isPri)html+='<div style="background:linear-gradient(135deg,#ff4757,#d63031);color:#fff;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;margin-bottom:2px">🔥 #'+c.r.priority_rank+'</div>';
-      html+='<div style="background:'+sysActionMeta.color+'33;color:'+sysActionMeta.color+';border:1px solid '+sysActionMeta.color+';padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600">'+sysActionMeta.emoji+' '+sysActionMeta.label+'</div>';
-      html+='<div style="margin-top:2px">Conv '+conv+'</div>';
-      html+='</div>';
-      html+='<div style="text-align:right"><div class="num '+retCls+'" style="font-size:18px;font-weight:700">'+(c.ret>=0?"+":"")+c.ret.toFixed(2)+'%</div>';
-      html+='<div style="font-size:11px;color:#8b949e">'+(c.val-c.cost>=0?"+":"")+'$'+(c.val-c.cost).toFixed(0)+'</div></div>';
-      html+='</div>';
-      // Verdict box
-      html+='<div style="background:'+c.verb_color+'22;border-radius:5px;padding:8px 12px;margin-bottom:8px">';
-      html+='<div style="font-size:15px;font-weight:700;color:'+c.verb_color+'">'+c.action_text+'</div>';
-      html+='<div style="font-size:11px;color:#c9d1d9;margin-top:3px">'+c.reason+'</div>';
-      html+='</div>';
-      // Stats row
-      html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10.5px;color:#8b949e;margin-bottom:6px">';
-      html+='<div>买 $'+c.h.buy_price.toFixed(2)+' × '+c.h.shares+'</div>';
-      html+='<div>现 $'+c.px.toFixed(2)+'</div>';
-      html+='<div>持有 '+heldDays+' 天</div>';
-      html+='</div>';
-      // Sparkline of Conviction over time
-      html+='<div style="display:flex;justify-content:space-between;align-items:center;background:#0d1218;border-radius:4px;padding:5px 8px;margin-bottom:6px">';
-      html+='<span style="font-size:9.5px;color:#8b949e">Conv 12 周走势</span>';
-      html+='<div>'+renderSparkline(c.t,120,22)+'</div>';
-      html+='</div>';
-      // Batch progress (if multi-batch)
-      // Hide batch progress for old positions already in profit zone (>+5%).
-      // The 3-batch plan is for ENTRY phase; once you've run +5%+ you're past entry.
-      const showBatch = planned > 1 && c.ret < 5 && usedBatches < planned;
-      if(showBatch){
-        html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:10px;color:#8b949e">';
-        html+='<span>批次:</span>';
-        for(let i=0;i<planned;i++){
-          const filled = i < usedBatches;
-          html+='<div style="flex:1;height:5px;background:'+(filled?"#3fb950":"#21262d")+';border-radius:2px"></div>';
-        }
-        html+='<span>'+usedBatches+'/'+planned+'</span>';
+      const isExternal = c.h.category === "etf" || c.h.category === "external";
+      if(isExternal){
+        // ====== ETF / 外部持仓 简化卡片 ======
+        const subtitle = c.h.name || (c.h.category==="etf" ? "ETF 防御层" : "外部持仓");
+        const hint = c.h.category==="etf"
+          ? "💎 长期持有 · 逢低补仓 · 不卖出"
+          : "📌 非 AI 链股票 · 仅追踪 P&L";
+        html+='<div style="background:var(--bg2);border:1px solid #444;border-left:4px solid #8b949e;border-radius:8px;padding:12px;opacity:0.9">';
+        html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">';
+        html+='<div style="min-width:0"><div style="font-size:16px;font-weight:700;color:#c9d1d9">'+c.t+'</div>';
+        html+='<div style="font-size:10px;color:#8b949e;margin-top:2px">'+subtitle+'</div></div>';
+        html+='<div style="text-align:right"><div class="num '+retCls+'" style="font-size:17px;font-weight:700">'+(c.ret>=0?"+":"")+c.ret.toFixed(2)+'%</div>';
+        html+='<div style="font-size:10.5px;color:#8b949e">'+(c.val-c.cost>=0?"+":"")+'$'+(c.val-c.cost).toFixed(0)+'</div></div>';
         html+='</div>';
-        if(nextBatchInfo)html+='<div style="font-size:10px;color:#58a6ff;margin-bottom:6px">📈 '+nextBatchInfo+'</div>';
-      } else if(planned > 1 && usedBatches < planned){
-        // We're past entry zone — show a one-line note instead
-        html+='<div style="font-size:10px;color:#8b949e;margin-bottom:6px">📌 已过入场阶段 (+'+c.ret.toFixed(1)+'%), 不再追加批次</div>';
+        html+='<div style="background:#0d1218;border-radius:4px;padding:6px 10px;margin-bottom:8px;display:flex;justify-content:space-between;font-size:11px;color:#8b949e">';
+        html+='<span>买 $'+c.h.buy_price.toFixed(2)+' × '+c.h.shares.toLocaleString()+'</span>';
+        html+='<span>现 $'+c.px.toFixed(2)+'</span>';
+        html+='</div>';
+        html+='<div style="background:#8b949e22;border-radius:4px;padding:5px 10px;margin-bottom:8px;font-size:11px;color:#c9d1d9;text-align:center">'+hint+'</div>';
+        html+='<div style="display:flex;gap:6px">';
+        html+='<button onclick="event.stopPropagation();promptAddBatch(\''+c.t+'\','+c.px+')" style="flex:2;background:#3fb950;color:#000;border:none;padding:5px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">➕ 逢低加仓</button>';
+        html+='<button onclick="event.stopPropagation();editHolding(\''+c.t+'\')" style="flex:1;background:#58a6ff;color:#000;border:none;padding:5px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">✏️</button>';
+        html+='<button onclick="event.stopPropagation();if(confirm(\'确认从持仓里移除 '+c.t+'?(不卖出，只是不追踪)\')){pfRemove(\''+c.t+'\').then(()=>{renderPortfolioView();});}" style="flex:1;background:#444;color:#c9d1d9;border:none;padding:5px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">🗑</button>';
+        html+='</div></div>';
+      } else {
+        // ====== AI 链股票 完整卡片 ======
+        html+='<div style="background:var(--bg2);border:1px solid '+c.verb_color+'44;border-left:4px solid '+c.verb_color+';border-radius:8px;padding:14px">';
+        // Header row: ticker + layer | strategy badge | P&L
+        html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px">';
+        html+='<div style="min-width:0"><div style="font-size:18px;font-weight:700;color:#58a6ff">'+c.t+'</div>';
+        html+='<div style="font-size:10px;color:#8b949e;margin-top:2px">'+(c.r?c.r.layer:"-")+'</div></div>';
+        html+='<div style="text-align:center;font-size:10px;color:#8b949e">';
+        if(isPri)html+='<div style="background:linear-gradient(135deg,#ff4757,#d63031);color:#fff;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;margin-bottom:2px">🔥 #'+c.r.priority_rank+'</div>';
+        html+='<div style="background:'+sysActionMeta.color+'33;color:'+sysActionMeta.color+';border:1px solid '+sysActionMeta.color+';padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600">'+sysActionMeta.emoji+' '+sysActionMeta.label+'</div>';
+        html+='<div style="margin-top:2px">Conv '+conv+'</div>';
+        html+='</div>';
+        html+='<div style="text-align:right"><div class="num '+retCls+'" style="font-size:18px;font-weight:700">'+(c.ret>=0?"+":"")+c.ret.toFixed(2)+'%</div>';
+        html+='<div style="font-size:11px;color:#8b949e">'+(c.val-c.cost>=0?"+":"")+'$'+(c.val-c.cost).toFixed(0)+'</div></div>';
+        html+='</div>';
+        html+='<div style="background:'+c.verb_color+'22;border-radius:5px;padding:8px 12px;margin-bottom:8px">';
+        html+='<div style="font-size:15px;font-weight:700;color:'+c.verb_color+'">'+c.action_text+'</div>';
+        html+='<div style="font-size:11px;color:#c9d1d9;margin-top:3px">'+c.reason+'</div>';
+        html+='</div>';
+        html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10.5px;color:#8b949e;margin-bottom:6px">';
+        html+='<div>买 $'+c.h.buy_price.toFixed(2)+' × '+c.h.shares+'</div>';
+        html+='<div>现 $'+c.px.toFixed(2)+'</div>';
+        html+='<div>持有 '+heldDays+' 天</div>';
+        html+='</div>';
+        html+='<div style="display:flex;justify-content:space-between;align-items:center;background:#0d1218;border-radius:4px;padding:5px 8px;margin-bottom:6px">';
+        html+='<span style="font-size:9.5px;color:#8b949e">Conv 12 周走势</span>';
+        html+='<div>'+renderSparkline(c.t,120,22)+'</div>';
+        html+='</div>';
+        const showBatch = planned > 1 && c.ret < 5 && usedBatches < planned;
+        if(showBatch){
+          html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:10px;color:#8b949e">';
+          html+='<span>批次:</span>';
+          for(let i=0;i<planned;i++){
+            const filled = i < usedBatches;
+            html+='<div style="flex:1;height:5px;background:'+(filled?"#3fb950":"#21262d")+';border-radius:2px"></div>';
+          }
+          html+='<span>'+usedBatches+'/'+planned+'</span>';
+          html+='</div>';
+          if(nextBatchInfo)html+='<div style="font-size:10px;color:#58a6ff;margin-bottom:6px">📈 '+nextBatchInfo+'</div>';
+        } else if(planned > 1 && usedBatches < planned){
+          html+='<div style="font-size:10px;color:#8b949e;margin-bottom:6px">📌 已过入场阶段 (+'+c.ret.toFixed(1)+'%), 不再追加批次</div>';
+        }
+        html+='<div style="display:flex;gap:4px"><button onclick="event.stopPropagation();promptAddBatch(\''+c.t+'\','+c.px+')" style="flex:1;background:#3fb950;color:#000;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">➕ 加仓</button>';
+        html+='<button onclick="event.stopPropagation();promptReduce(\''+c.t+'\')" style="flex:1;background:#f39c12;color:#000;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">➖ 减仓</button>';
+        html+='<button onclick="event.stopPropagation();editHolding(\''+c.t+'\')" style="flex:1;background:#58a6ff;color:#000;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">✏️ 编辑</button>';
+        html+='<button onclick="event.stopPropagation();if(confirm(\'确认清仓 '+c.t+'?\')){pfRemove(\''+c.t+'\').then(()=>{renderPortfolioView();render();});}" style="flex:1;background:#d63031;color:#fff;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">🚪 清仓</button>';
+        html+='</div></div>';
       }
-      // Buttons row
-      html+='<div style="display:flex;gap:4px"><button onclick="event.stopPropagation();promptAddBatch(\''+c.t+'\','+c.px+')" style="flex:1;background:#3fb950;color:#000;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">➕ 加仓</button>';
-      html+='<button onclick="event.stopPropagation();promptReduce(\''+c.t+'\')" style="flex:1;background:#f39c12;color:#000;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">➖ 减仓</button>';
-      html+='<button onclick="event.stopPropagation();editHolding(\''+c.t+'\')" style="flex:1;background:#58a6ff;color:#000;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">✏️ 编辑</button>';
-      html+='<button onclick="event.stopPropagation();if(confirm(\'确认清仓 '+c.t+'?\')){pfRemove(\''+c.t+'\').then(()=>{renderPortfolioView();render();});}" style="flex:1;background:#d63031;color:#fff;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">🚪 清仓</button>';
-      html+='</div></div>';
     }
     html+='</div></div>';
   }
@@ -918,17 +946,14 @@ function renderSparkline(ticker, width=120, height=24){
     const y = height - ((values[i] - minV) / range * (height - 4)) - 2;
     points += (i===0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1) + " ";
   }
-  // Latest conv color
   const lastV = values[values.length - 1];
   const firstV = values[0];
   const trend = lastV - firstV;
   const lineColor = trend > 5 ? "#3fb950" : (trend < -5 ? "#d63031" : "#8b949e");
-  // Reference line at 60 (BUY threshold)
   const y60 = height - ((60 - minV) / range * (height - 4)) - 2;
   let svg = '<svg width="'+width+'" height="'+height+'" style="vertical-align:middle">';
   svg += '<line x1="0" y1="'+y60.toFixed(1)+'" x2="'+width+'" y2="'+y60.toFixed(1)+'" stroke="#444" stroke-dasharray="2,2" stroke-width="0.5"/>';
   svg += '<path d="'+points+'" stroke="'+lineColor+'" stroke-width="1.5" fill="none"/>';
-  // Highlight last point
   const lastX = (recent.length - 1) * dx;
   const lastY = height - ((lastV - minV) / range * (height - 4)) - 2;
   svg += '<circle cx="'+lastX.toFixed(1)+'" cy="'+lastY.toFixed(1)+'" r="2" fill="'+lineColor+'"/>';
@@ -938,7 +963,7 @@ function renderSparkline(ticker, width=120, height=24){
 }
 
 async function importHoldings(){
-  const json = prompt("粘贴 my_holdings_backup.json 内容\n(从 ⬇️ 导出备份 下载)\n注意：会替换当前所有持仓！");
+  const json = prompt("粘贴 my_holdings_backup.json 内容 (从导出按钮下载的文件)\n注意：会替换当前所有持仓！");
   if(!json)return;
   let parsed;
   try{ parsed = JSON.parse(json); }catch(e){ alert("JSON 格式错误: "+e.message); return; }

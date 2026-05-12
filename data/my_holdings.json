@@ -4,7 +4,13 @@
     "shares": 30,
     "buy_price": 180.06,
     "buy_date": "2025-08-01",
-    "batches": [{"price": 180.06, "shares": 30, "date": "2025-08-01"}],
+    "batches": [
+      {
+        "price": 180.06,
+        "shares": 30,
+        "date": "2025-08-01"
+      }
+    ],
     "_imported": "from Fidelity 2026-05-11"
   },
   "AMZN": {
@@ -12,7 +18,13 @@
     "shares": 18,
     "buy_price": 209.18,
     "buy_date": "2024-08-01",
-    "batches": [{"price": 209.18, "shares": 18, "date": "2024-08-01"}],
+    "batches": [
+      {
+        "price": 209.18,
+        "shares": 18,
+        "date": "2024-08-01"
+      }
+    ],
     "_imported": "from Fidelity 2026-05-11"
   },
   "ARM": {
@@ -20,7 +32,13 @@
     "shares": 20,
     "buy_price": 211.15,
     "buy_date": "2025-10-01",
-    "batches": [{"price": 211.15, "shares": 20, "date": "2025-10-01"}],
+    "batches": [
+      {
+        "price": 211.15,
+        "shares": 20,
+        "date": "2025-10-01"
+      }
+    ],
     "_imported": "from Fidelity 2026-05-11"
   },
   "GOOGL": {
@@ -28,15 +46,43 @@
     "shares": 20,
     "buy_price": 303.18,
     "buy_date": "2025-04-01",
-    "batches": [{"price": 303.18, "shares": 20, "date": "2025-04-01"}],
+    "batches": [
+      {
+        "price": 303.18,
+        "shares": 20,
+        "date": "2025-04-01"
+      }
+    ],
     "_imported": "from Fidelity 2026-05-11"
+  },
+  "HIMX": {
+    "ticker": "HIMX",
+    "shares": 500,
+    "buy_price": 19.54,
+    "buy_date": "2025-09-01",
+    "batches": [
+      {
+        "price": 19.54,
+        "shares": 500,
+        "date": "2025-09-01"
+      }
+    ],
+    "category": "external",
+    "name": "Himax Technologies",
+    "_imported": "from Fidelity 2026-05-11 - Taiwan display IC"
   },
   "LSCC": {
     "ticker": "LSCC",
     "shares": 20,
     "buy_price": 127.19,
     "buy_date": "2025-11-01",
-    "batches": [{"price": 127.19, "shares": 20, "date": "2025-11-01"}],
+    "batches": [
+      {
+        "price": 127.19,
+        "shares": 20,
+        "date": "2025-11-01"
+      }
+    ],
     "_imported": "from Fidelity 2026-05-11"
   },
   "MSFT": {
@@ -44,15 +90,27 @@
     "shares": 16.858,
     "buy_price": 399.69,
     "buy_date": "2025-06-01",
-    "batches": [{"price": 399.69, "shares": 16.858, "date": "2025-06-01"}],
+    "batches": [
+      {
+        "price": 399.69,
+        "shares": 16.858,
+        "date": "2025-06-01"
+      }
+    ],
     "_imported": "from Fidelity 2026-05-11"
   },
   "QCOM": {
     "ticker": "QCOM",
     "shares": 40,
-    "buy_price": 221.00,
+    "buy_price": 221.0,
     "buy_date": "2025-05-01",
-    "batches": [{"price": 221.00, "shares": 40, "date": "2025-05-01"}],
+    "batches": [
+      {
+        "price": 221.0,
+        "shares": 40,
+        "date": "2025-05-01"
+      }
+    ],
     "_imported": "from Fidelity 2026-05-11"
   },
   "VRT": {
@@ -60,7 +118,93 @@
     "shares": 10,
     "buy_price": 344.51,
     "buy_date": "2025-09-01",
-    "batches": [{"price": 344.51, "shares": 10, "date": "2025-09-01"}],
+    "batches": [
+      {
+        "price": 344.51,
+        "shares": 10,
+        "date": "2025-09-01"
+      }
+    ],
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "DRAM": {
+    "ticker": "DRAM",
+    "shares": 200,
+    "buy_price": 52.56,
+    "buy_date": "2025-07-01",
+    "batches": [
+      {
+        "price": 52.56,
+        "shares": 200,
+        "date": "2025-07-01"
+      }
+    ],
+    "category": "etf",
+    "name": "Roundhill Memory ETF",
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "QQQM": {
+    "ticker": "QQQM",
+    "shares": 27.775,
+    "buy_price": 247.55,
+    "buy_date": "2024-06-01",
+    "batches": [
+      {
+        "price": 247.55,
+        "shares": 27.775,
+        "date": "2024-06-01"
+      }
+    ],
+    "category": "etf",
+    "name": "Invesco Nasdaq 100 ETF",
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "SCHD": {
+    "ticker": "SCHD",
+    "shares": 148.006,
+    "buy_price": 30.68,
+    "buy_date": "2024-06-01",
+    "batches": [
+      {
+        "price": 30.68,
+        "shares": 148.006,
+        "date": "2024-06-01"
+      }
+    ],
+    "category": "etf",
+    "name": "Schwab Dividend ETF",
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "VGT": {
+    "ticker": "VGT",
+    "shares": 85.296,
+    "buy_price": 91.68,
+    "buy_date": "2024-03-01",
+    "batches": [
+      {
+        "price": 91.68,
+        "shares": 85.296,
+        "date": "2024-03-01"
+      }
+    ],
+    "category": "etf",
+    "name": "Vanguard Tech ETF",
+    "_imported": "from Fidelity 2026-05-11"
+  },
+  "VOO": {
+    "ticker": "VOO",
+    "shares": 6.831,
+    "buy_price": 617.32,
+    "buy_date": "2024-09-01",
+    "batches": [
+      {
+        "price": 617.32,
+        "shares": 6.831,
+        "date": "2024-09-01"
+      }
+    ],
+    "category": "etf",
+    "name": "Vanguard SP500 ETF",
     "_imported": "from Fidelity 2026-05-11"
   }
 }
