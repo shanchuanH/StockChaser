@@ -32,8 +32,21 @@ def fetch():
         sys.exit(1)
 
     universe = json.loads(UNIVERSE.read_text(encoding="utf-8"))
-    tickers = sorted(set([u["ticker"] for u in universe] + ["SPY", "QQQ"]))
-    print(f"Fetching {len(tickers)} tickers (24 months)…")
+    # v3.7: also fetch ETF / external positions from my_holdings.json
+    # so the portfolio view shows real P&L for buy-and-hold ETFs / HIMX.
+    extra_tickers = set()
+    holdings_path = ROOT / "data" / "my_holdings.json"
+    if holdings_path.exists():
+        try:
+            holdings = json.loads(holdings_path.read_text(encoding="utf-8"))
+            universe_tickers_set = {u["ticker"] for u in universe}
+            for tk, hh in holdings.items():
+                if hh.get("category") in ("etf", "external") and tk not in universe_tickers_set:
+                    extra_tickers.add(tk)
+        except Exception:
+            pass
+    tickers = sorted(set([u["ticker"] for u in universe] + ["SPY", "QQQ"]) | extra_tickers)
+    print(f"Fetching {len(tickers)} tickers ({len(extra_tickers)} extras for ETF tracking)…")
 
     end = datetime.now(timezone.utc)
     # 36 months — covers 2022 bear market for stress-testing strategies
@@ -94,7 +107,27 @@ def fetch():
         "spy_dist_sma200_pct": spy_dist_sma200_pct,
         "is_mock": False,
         "tickers": {},
+        "extra_prices": {},
     }
+
+    # Fetch ETF / external ticker prices for portfolio P&L (no strategy)
+    for tk in sorted(extra_tickers):
+        try:
+            sub_e = df[tk][["Close"]].dropna()
+            if len(sub_e) < 1:
+                continue
+            close_e = sub_e["Close"]
+            last_e = float(close_e.iloc[-1])
+            wk_e = round(float((close_e.iloc[-1] / close_e.iloc[-5] - 1) * 100), 2) if len(close_e) >= 5 else None
+            mo_e = round(float((close_e.iloc[-1] / close_e.iloc[-21] - 1) * 100), 2) if len(close_e) >= 21 else None
+            out["extra_prices"][tk] = {
+                "latest_price": round(last_e, 2),
+                "latest_date": str(close_e.index[-1].date()),
+                "week_return_pct": wk_e,
+                "month_return_pct": mo_e,
+            }
+        except Exception as e:
+            print(f"  ! extra {tk}: {e}")
 
     for u in universe:
         t = u["ticker"]

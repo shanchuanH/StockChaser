@@ -469,6 +469,7 @@ def main():
         ),
         "is_mock": prices.get("is_mock", False),
         "engine_version": "v3.5",
+        "extra_prices": prices.get("extra_prices", {}),
         "signal_meta": SIGNAL_META,
         "action_meta": ACTION_META,
         "horizon_meta": HORIZON_META,

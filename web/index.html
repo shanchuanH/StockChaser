@@ -639,7 +639,9 @@ function renderPortfolioView(){
   for(const t of tickers){
     const h=pf[t];
     const r=(data&&data.rows||[]).find(x=>x.ticker===t);
-    const px=r?r.latest_price:h.buy_price;
+    // ETF/external: look up price from data.extra_prices (fetched separately)
+    const extra=(data&&data.extra_prices&&data.extra_prices[t])||null;
+    const px=(r?r.latest_price:null) || (extra?extra.latest_price:null) || h.buy_price;
     const cost=h.buy_price*h.shares;
     const val=px*h.shares;
     totalCost+=cost; totalValue+=val;
@@ -791,6 +793,19 @@ function renderPortfolioView(){
         html+='<div style="background:'+c.verb_color+'22;border-radius:5px;padding:8px 12px;margin-bottom:8px">';
         html+='<div style="font-size:15px;font-weight:700;color:'+c.verb_color+'">'+c.action_text+'</div>';
         html+='<div style="font-size:11px;color:#c9d1d9;margin-top:3px">'+c.reason+'</div>';
+        // Always-on 止损规则速查 (一目了然: 全清 vs 减半)
+        const stop_p = h.buy_price * 0.92;
+        const ret_now = c.ret;
+        let stop_rule = '';
+        if(ret_now <= -8){
+          stop_rule = '<strong style="color:#ff6b6b">🛑 已跌破 -8% → 立即一次性全清 '+h.shares+' 股</strong>';
+        } else {
+          stop_rule = '🛑 跌到 <strong>$'+stop_p.toFixed(2)+'</strong> (-8%) → <strong>一次性全清 '+h.shares+' 股</strong>';
+          if(c.r && c.r.conviction_score < 60){
+            stop_rule += '<br>⚠️ Conv 跌破 45 → <strong>卖一半 '+Math.floor(h.shares/2)+' 股</strong>';
+          }
+        }
+        html+='<div style="font-size:10.5px;color:#f39c12;margin-top:5px;padding-top:5px;border-top:1px dashed #444">'+stop_rule+'</div>';
         html+='</div>';
         html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10.5px;color:#8b949e;margin-bottom:6px">';
         html+='<div>买 $'+c.h.buy_price.toFixed(2)+' × '+c.h.shares+'</div>';
