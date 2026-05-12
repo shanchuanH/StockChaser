@@ -1,15 +1,15 @@
 {
-  "_comment": "StockChaser 个人化操作手册配置 - 改这里就改全局策略",
-  "portfolio_cash_usd": 10000,
-  "max_positions": 5,
-  "cash_buffer_pct": 25,
+  "_comment": "StockChaser 个人化配置 — 改这里就改全局策略",
+  "portfolio_cash_usd": 20000,
+  "max_positions": 10,
+  "cash_buffer_pct": 10,
   "risk_per_trade_pct": 1.5,
-  "max_position_size_pct": 20,
+  "max_position_size_pct": 10,
   "entry_style": "3_batch",
   "entry_batches": [
-    {"step": 1, "weight_pct": 7,  "trigger": "立即买入 (PRIORITY 信号)"},
-    {"step": 2, "weight_pct": 7,  "trigger": "涨 +3% 且未跌破 SMA10"},
-    {"step": 3, "weight_pct": 6,  "trigger": "突破 4W 高"}
+    {"step": 1, "weight_pct": 4, "trigger": "立即买入 (PRIORITY 信号)"},
+    {"step": 2, "weight_pct": 3, "trigger": "涨 +3% 且未跌破 SMA10"},
+    {"step": 3, "weight_pct": 3, "trigger": "突破 4W 高"}
   ],
   "stop_ladder": [
     {"after_gain_pct": 0,  "stop_logic": "initial_atr",   "desc": "入场价 - 1.5 ATR"},

@@ -36,7 +36,8 @@ def fetch():
     print(f"Fetching {len(tickers)} tickers (24 months)…")
 
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=730)
+    # 36 months — covers 2022 bear market for stress-testing strategies
+    start = end - timedelta(days=1100)
     df = yf.download(
         tickers,
         start=start.strftime("%Y-%m-%d"),
