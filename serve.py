@@ -47,6 +47,42 @@ SEED_ALWAYS_REFRESH = {
     "conviction_history.json",
 }
 
+# Files that should MERGE new entries from seed but never overwrite
+# existing user-edited entries on disk.
+# Example: data_seed/my_holdings.json gains new ETF positions → we want
+# to add them to disk-side without trampling user's ✏️ edits on
+# existing positions.
+SEED_MERGE_NEW_KEYS = {
+    "my_holdings.json",
+}
+
+
+def _merge_dict_new_keys(seed_path, disk_path):
+    """Add keys from seed JSON that don't exist on disk; leave existing alone."""
+    import shutil
+    try:
+        seed = json.loads(seed_path.read_text(encoding="utf-8"))
+        if not isinstance(seed, dict):
+            return False, "seed is not a dict"
+        if not disk_path.exists():
+            shutil.copy2(seed_path, disk_path)
+            return True, f"seeded {len(seed)} entries"
+        disk = json.loads(disk_path.read_text(encoding="utf-8"))
+        if not isinstance(disk, dict):
+            return False, "disk is not a dict"
+        added = [k for k in seed if k not in disk]
+        if not added:
+            return False, "no new keys to merge"
+        for k in added:
+            disk[k] = seed[k]
+        disk_path.write_text(
+            json.dumps(disk, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return True, f"merged {len(added)} new entries: {', '.join(added)}"
+    except Exception as exc:
+        return False, str(exc)
+
 
 def _seed_data_dir():
     """Bootstrap data/ from data_seed/ on container start.
@@ -55,13 +91,14 @@ def _seed_data_dir():
     files baked into the git build. We seed canonical files from
     data_seed/ which lives outside the mount.
 
-    Two flavors:
-      - user-mutable (universe.json, portfolio.json, my_holdings.json):
-        copy only if absent so server-side edits via /api/* survive
-        across deploys.
-      - always-refresh (backtest_results.json): overwrite when the seed
-        mtime is newer than the on-disk mtime so new local backtests
-        actually reach Render.
+    Three flavors:
+      - always-refresh (backtest_results.json, conviction_history.json):
+        overwrite when seed mtime is newer than on-disk so new local
+        runs reach Render.
+      - merge-new-keys (my_holdings.json): add entries from seed that
+        don't exist on disk; leave user-edited entries alone.
+      - seed-if-absent (universe.json, portfolio.json): copy only if
+        absent so server-side edits survive across deploys.
     """
     if not SEED.exists():
         return
@@ -72,10 +109,13 @@ def _seed_data_dir():
         dst = DATA / src.name
         try:
             if src.name in SEED_ALWAYS_REFRESH:
-                # Overwrite when the bundled seed is newer (or disk missing)
                 if not dst.exists() or src.stat().st_mtime > dst.stat().st_mtime:
                     shutil.copy2(src, dst)
                     print(f"refreshed {dst.name} from data_seed/ (always-refresh)")
+            elif src.name in SEED_MERGE_NEW_KEYS:
+                ok, msg = _merge_dict_new_keys(src, dst)
+                if ok:
+                    print(f"merge {dst.name}: {msg}")
             elif not dst.exists():
                 shutil.copy2(src, dst)
                 print(f"seeded {dst.name} from data_seed/")
