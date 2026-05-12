@@ -693,7 +693,12 @@ function renderPortfolioView(){
   const cashLeft=totalCash-totalCost;
 
   let html='<div style="padding:0 20px 20px">';
-  html+='<h3 style="color:#fff;margin-bottom:14px">💼 我的持仓 ('+tickers.length+'/'+(config.max_positions||10)+')</h3>';
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">';
+  html+='<h3 style="color:#fff;margin:0">💼 我的持仓 ('+tickers.length+'/'+(config.max_positions||10)+')</h3>';
+  html+='<div style="display:flex;gap:6px">';
+  html+='<a href="/api/holdings/export" download="my_holdings_backup.json" style="background:#2a313c;color:#c9d1d9;border:1px solid #444;padding:5px 10px;border-radius:4px;font-size:11px;text-decoration:none">⬇️ 导出备份</a>';
+  html+='<button onclick="importHoldings()" style="background:#2a313c;color:#c9d1d9;border:1px solid #444;padding:5px 10px;border-radius:4px;font-size:11px;cursor:pointer">⬆️ 导入</button>';
+  html+='</div></div>';
   // Cash card: use account_total if set, else fall back to portfolio_cash_usd
   const accountTotal = config.account_total_usd || config.portfolio_cash_usd || 20000;
   const realCashLeft = accountTotal - totalCost;
@@ -930,6 +935,23 @@ function renderSparkline(ticker, width=120, height=24){
   svg += '</svg>';
   const trendText = trend >= 0 ? "+"+trend.toFixed(0) : trend.toFixed(0);
   return svg + ' <span style="color:'+lineColor+';font-size:10px">'+trendText+'</span>';
+}
+
+async function importHoldings(){
+  const json = prompt("粘贴 my_holdings_backup.json 内容\n(从 ⬇️ 导出备份 下载)\n注意：会替换当前所有持仓！");
+  if(!json)return;
+  let parsed;
+  try{ parsed = JSON.parse(json); }catch(e){ alert("JSON 格式错误: "+e.message); return; }
+  if(!confirm("即将替换当前 "+Object.keys(pfLoadSync()).length+" 个持仓为新的 "+Object.keys(parsed).length+" 个，确定?"))return;
+  try{
+    const r = await fetch("/api/holdings/import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(parsed)});
+    if(!r.ok){alert("导入失败: "+await r.text()); return;}
+    _pfCache=null;
+    await pfLoad();
+    renderPortfolioView();
+    render();
+    alert("已导入 "+Object.keys(parsed).length+" 个持仓");
+  }catch(e){alert("导入失败: "+e.message);}
 }
 
 // Boot

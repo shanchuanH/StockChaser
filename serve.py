@@ -44,6 +44,7 @@ SEED_ALWAYS_REFRESH = {
     # the seed file in git is newer, otherwise the dashboard freezes on
     # the version from the first deploy.
     "backtest_results.json",
+    "conviction_history.json",
 }
 
 
@@ -339,6 +340,29 @@ def api_conviction_history():
     return Response(fp.read_text(encoding="utf-8"), mimetype="application/json")
 
 
+@app.route("/api/holdings/export", methods=["GET"])
+def api_holdings_export():
+    """Download holdings as a JSON file (backup)."""
+    pf = _load_holdings()
+    body = json.dumps(pf, ensure_ascii=False, indent=2)
+    return Response(
+        body,
+        mimetype="application/json",
+        headers={"Content-Disposition": 'attachment; filename="my_holdings_backup.json"'}
+    )
+
+
+@app.route("/api/holdings/import", methods=["POST"])
+def api_holdings_import():
+    """Replace holdings with uploaded JSON (restore from backup)."""
+    body = request.get_json(force=True, silent=True) or {}
+    if not isinstance(body, dict):
+        return jsonify({"error": "expected dict {ticker: {...}}"}), 400
+    with _holdings_lock:
+        _save_holdings(body)
+    return jsonify({"ok": True, "count": len(body)})
+
+
 @app.route("/api/holdings/edit", methods=["POST"])
 def api_holdings_edit():
     """Edit individual fields of an existing holding (fix data errors)."""
@@ -513,71 +537,4 @@ def api_telegram_webhook():
             print(f"telegram dispatch error: {exc}")
             return jsonify({"ok": True})
         if result:
-            if result.get("side_effect") == "refresh":
-                _trigger_async_refresh()
-            _telegram_send(chat_id, result["text"], result.get("reply_markup"))
-        return jsonify({"ok": True})
-
-    return jsonify({"ok": True})
-
-
-def _register_telegram_webhook():
-    """Auto-register webhook with Telegram on Render boot."""
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-    base = (os.environ.get("RENDER_EXTERNAL_URL")
-            or os.environ.get("BASE_URL", "")).strip()
-    if not token or not base:
-        print("telegram webhook: skipped (no token or external URL)")
-        return
-    secret = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
-    url = base.rstrip("/") + "/api/telegram/webhook"
-    payload = {
-        "url": url,
-        "drop_pending_updates": "true",
-        "allowed_updates": json.dumps(["message", "callback_query"]),
-    }
-    if secret:
-        payload["secret_token"] = secret
-    try:
-        ok = _telegram_call("setWebhook", payload, timeout=10)
-        print(f"telegram setWebhook → {url} ({'ok' if ok else 'failed'})")
-    except Exception as exc:
-        print(f"telegram setWebhook error: {exc}")
-
-
-@app.route("/api/universe", methods=["POST"])
-def api_universe_post():
-    try:
-        data = request.get_json(force=True)
-        if not isinstance(data, list):
-            return jsonify({"error": "Expected a JSON array"}), 400
-        fp = DATA / "universe.json"
-        fp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        return jsonify({"status": "ok", "count": len(data)})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
-
-
-# All helper functions are now defined; safe to register the webhook.
-if _IS_RENDER:
-    _register_telegram_webhook()
-
-
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--port",    type=int, default=int(os.environ.get("PORT", 8000)))
-    ap.add_argument("--host",    default="0.0.0.0")
-    ap.add_argument("--no-auto", action="store_true")
-    ap.add_argument("--mock",    action="store_true")
-    args = ap.parse_args()
-
-    if not args.no_auto and not _IS_RENDER:
-        t = threading.Thread(target=background_refresh, args=(args.mock,), daemon=True)
-        t.start()
-        print("Background refresher started (local mode).")
-
-    app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
-
-
-if __name__ == "__main__":
-    main()
+            if result.get("side_effect") == "re
