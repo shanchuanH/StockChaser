@@ -309,6 +309,86 @@ function renderHoldingControl(r){
   return '<div style="font-size:10px"><strong class="'+cls+'">'+(ret>=0?"+":"")+ret.toFixed(1)+'%</strong><br><span style="color:#8b949e">'+held.shares+' 股 @ $'+held.buy_price.toFixed(2)+'</span></div>';
 }
 
+function renderDetail(r){
+  const am=(data.action_meta&&data.action_meta[r.action])||{emoji:"",label:r.action||"-",color:"#8b949e"};
+  let pbHtml='';
+  try{ pbHtml=typeof renderPlaybook==='function'?renderPlaybook(r):''; }catch(e){ pbHtml=''; }
+  return '<tr class="detail"><td colspan="16">'+
+    '<div class="detail-grid"><div>'+
+    "<h4>核心逻辑/催化剂</h4>"+
+    '<p><span class="label">逻辑</span>'+(r.logic||"-")+"</p>"+
+    '<p><span class="label">催化</span>'+(r.catalyst||"-")+"</p>"+
+    '<p><span class="label">中美互证</span>'+(r.cn_pair||"-")+"</p>"+
+    '<p><span class="label">风险</span>'+(r.risk||"-")+"</p>"+
+    '<p><span class="label">子赛道</span>'+(r.subsector||"-")+"</p>"+
+    '<p><span class="label">策略</span>'+(r.strategy||"-")+"</p>"+
+    "</div><div>"+
+    '<h4>📌 操作建议 ('+am.emoji+" "+am.label+')</h4>'+
+    '<p style="font-size:14px"><span class="label">动作</span><strong style="color:'+am.color+'">'+am.emoji+" "+am.label+'</strong> · <span class="size-tag">'+(r.size_class||"-")+'</span> · <span class="horizon-tag">'+(r.holding_horizon||"-")+" "+(r.horizon_days||"")+"</span></p>"+
+    '<p><span class="label">ATR(20)</span>$'+fmt(r.atr_20)+" ("+fmt(r.atr_pct,"%")+" 日波动)</p>"+
+    "<h4 style=\"margin-top:12px\">置信度三轴</h4>"+
+    '<p><span class="label">趋势强度 TS</span><strong>'+(r.trend_strength||"-")+"</strong> / 100</p>"+
+    "<p><span class=\"label\">入场质量 EQ</span><strong>"+(r.entry_quality||"-")+"</strong> / 100</p>"+
+    '<p><span class="label">基本面 FC</span><strong>'+(r.fund_conviction||"-")+"</strong> / 100</p>"+
+    "<p><span class=\"label\">Regime 改正</span>×"+(r.regime_modifier||"-")+" "+(data.regime_label||"")+"</p>"+
+    "<p style=\"font-size:13px;margin-top:8px\"><span class=\"label\">→ 置信度</span><strong style=\"color:"+convColor(r.conviction_score||0)+";font-size:18px\">"+fmt(r.conviction_score,"",1)+"</strong> / 100</p>"+
+    "</div></div>"+pbHtml+"</td></tr>";
+}
+
+function render(){
+  if(!data||!data.rows){return;}
+  const rows=filterRows();
+  let html="";
+  rows.forEach((r,i)=>{
+    try{
+      html+=renderRow(r,i);
+      if(expandedTicker===r.ticker)html+=renderDetail(r);
+    }catch(e){
+      // Defensive: don't let one bad row crash the whole table
+      html+='<tr><td colspan="16" style="color:#f39c12;padding:6px 10px">⚠️ '+r.ticker+': '+e.message+'</td></tr>';
+    }
+  });
+  const tbody=document.getElementById("tbody");
+  if(tbody)tbody.innerHTML=html;
+  document.querySelectorAll("tr.row").forEach(tr=>{
+    tr.addEventListener("click",(ev)=>{
+      // Don't toggle if user clicked a button inside the row
+      if(ev.target.tagName==="BUTTON")return;
+      const t=tr.dataset.ticker;
+      expandedTicker=(expandedTicker===t)?null:t;
+      render();
+    });
+  });
+}
+
+// Filter tab wiring (was lost during refactor)
+document.querySelectorAll(".tab").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    currentFilter=b.dataset.filter;
+    expandedTicker=null;
+    render();
+  });
+});
+const _sortEl=document.getElementById("sort");
+if(_sortEl)_sortEl.addEventListener("change",e=>{currentSort=e.target.value;render();});
+const _searchEl=document.getElementById("search");
+if(_searchEl)_searchEl.addEventListener("input",e=>{searchQuery=e.target.value;render();});
+const _refreshEl=document.getElementById("refresh-btn");
+if(_refreshEl)_refreshEl.addEventListener("click",async()=>{
+  _refreshEl.disabled=true;_refreshEl.textContent="抓取中...";
+  try{
+    if(apiRefresh){
+      const r=await fetch(apiRefresh,{method:"POST"});
+      if(r.ok)data=await r.json();
+      else throw new Error(await r.text());
+      updateCounts();render();
+    }else await loadData();
+  }catch(e){alert("刷新失败: "+e.message);}
+  _refreshEl.disabled=false;_refreshEl.textContent="刷新";
+});
+
 function promptBuy(ticker, price){
   const shares=prompt("买入 "+ticker+" 多少股? (建议参考操作手册)\n当前价: $"+price.toFixed(2),"10");
   if(!shares||isNaN(shares))return;
@@ -353,6 +433,7 @@ function determineNextAction(held, r){
   return {action:"✓ 持有",color:"#8b949e",detail:ret_pct.toFixed(1)+"% — 等待信号"};
 }
 
+
 function renderPortfolioView(){
   const pf=pfLoad();
   const tickers=Object.keys(pf);
@@ -362,8 +443,7 @@ function renderPortfolioView(){
     document.getElementById('pf-content').innerHTML='<div class="empty-bt"><h3 style="color:#fff;margin-bottom:14px">💼 我的持仓</h3><p>还没有持仓记录</p><p style="margin-top:8px;color:#8b949e">在主表点击任一行的 📌 买入 按钮记录你的实际成交</p><p style="margin-top:14px;font-size:11px">配置: 总仓 $'+totalCash+' · 最多 '+(config.max_positions||10)+' 只 · 单笔风险 '+(config.risk_per_trade_pct||1.5)+'%</p></div>';
     return;
   }
-  // Compute live PnL
-  let totalCost=0, totalValue=0;
+  let totalCost=0,totalValue=0;
   const rows=[];
   for(const t of tickers){
     const h=pf[t];
@@ -371,8 +451,7 @@ function renderPortfolioView(){
     const px=r?r.latest_price:h.buy_price;
     const cost=h.buy_price*h.shares;
     const val=px*h.shares;
-    totalCost+=cost;
-    totalValue+=val;
+    totalCost+=cost; totalValue+=val;
     rows.push({h,r,px,cost,val,ret:(px/h.buy_price-1)*100});
   }
   rows.sort((a,b)=>b.val-a.val);
@@ -381,7 +460,6 @@ function renderPortfolioView(){
   const exposure=totalCost/totalCash*100;
 
   let html='<div style="padding:0 20px 20px"><h3 style="color:#fff;margin-bottom:10px">💼 我的持仓 ('+tickers.length+'/'+(config.max_positions||10)+')</h3>';
-  // Top stats
   html+='<div class="backtest-grid">';
   html+='<div class="stat"><div class="label">已投入</div><div class="value">$'+totalCost.toFixed(0)+'</div></div>';
   html+='<div class="stat"><div class="label">当前市值</div><div class="value '+(totalRet>=0?"up":"down")+'">$'+totalValue.toFixed(0)+'</div></div>';
@@ -391,7 +469,6 @@ function renderPortfolioView(){
   html+='<div class="stat"><div class="label">可继续买入</div><div class="value">'+((config.max_positions||10)-tickers.length)+' 只</div></div>';
   html+='</div>';
 
-  // Table
   html+='<div class="chart-wrap"><h3>每只持仓 — 下一步操作建议</h3>';
   html+='<table style="width:100%;font-size:11.5px"><thead><tr style="background:#1a1f26">';
   html+='<th style="padding:8px">Ticker</th><th style="padding:8px">买入价</th><th class="num" style="padding:8px">股数</th><th class="num" style="padding:8px">成本</th><th class="num" style="padding:8px">现价</th><th class="num" style="padding:8px">浮盈</th><th class="num" style="padding:8px">Conv</th><th style="padding:8px">📍 下一步</th><th style="padding:8px">操作</th>';
@@ -410,7 +487,7 @@ function renderPortfolioView(){
     html+='<td style="padding:8px"><strong style="color:'+next.color+'">'+next.action+'</strong><br><span style="font-size:10px;color:#8b949e">'+next.detail+'</span></td>';
     html+='<td style="padding:8px"><button onclick="event.stopPropagation();promptAddBatch(\''+x.h.ticker+'\','+(x.r?x.r.latest_price:x.h.buy_price)+')" style="background:#3fb950;color:#000;border:none;padding:3px 7px;border-radius:3px;font-size:10px;cursor:pointer;margin-right:3px">+</button>';
     html+='<button onclick="event.stopPropagation();promptReduce(\''+x.h.ticker+'\')" style="background:#f39c12;color:#000;border:none;padding:3px 7px;border-radius:3px;font-size:10px;cursor:pointer;margin-right:3px">-</button>';
-    html+='<button onclick="event.stopPropagation();if(confirm(\'确认清仓 '+x.h.ticker+'?\')){pfRemove(\''+x.h.ticker+'\');renderPortfolioView();}" style="background:#d63031;color:#fff;border:none;padding:3px 7px;border-radius:3px;font-size:10px;cursor:pointer">x</button></td>';
+    html+='<button onclick="event.stopPropagation();if(confirm(\'确认清仓 '+x.h.ticker+'?\')){pfRemove(\''+x.h.ticker+'\');renderPortfolioView();render();}" style="background:#d63031;color:#fff;border:none;padding:3px 7px;border-radius:3px;font-size:10px;cursor:pointer">x</button></td>';
     html+='</tr>';
   }
   html+='</tbody></table></div>';
@@ -424,8 +501,7 @@ function promptAddBatch(ticker, price){
   const px=parseFloat(prompt("成交价?", price.toFixed(2)));
   if(isNaN(px))return;
   pfAddBatch(ticker, px, parseInt(shares));
-  renderPortfolioView();
-  render();
+  renderPortfolioView(); render();
 }
 function promptReduce(ticker){
   const pf=pfLoad();
@@ -433,32 +509,71 @@ function promptReduce(ticker){
   const shares=prompt("减仓 "+ticker+" 多少股? (持有 "+h.shares+" 股)", Math.floor(h.shares/2).toString());
   if(!shares||isNaN(shares))return;
   pfUpdateShares(ticker, h.shares-parseInt(shares));
-  renderPortfolioView();
-  render();
+  renderPortfolioView(); render();
 }
 
-// View tab routing
+// View-tab routing
 document.querySelectorAll(".view-tab").forEach(b=>{
   b.addEventListener("click",()=>{
     document.querySelectorAll(".view-tab").forEach(x=>x.classList.remove("active"));
     document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");
     const target=b.dataset.view;
-    document.getElementById("view-"+target).classList.add("active");
-    if(target==="backtest")loadBacktest();
+    const v=document.getElementById("view-"+target);
+    if(v)v.classList.add("active");
+    if(target==="backtest"&&typeof loadBacktest==="function")loadBacktest();
     if(target==="portfolio")renderPortfolioView();
   });
 });
 
-// Initial load & periodic refresh
+// Backtest loader (minimal)
+let _btLoaded=false;
+async function loadBacktest(){
+  if(_btLoaded)return;
+  try{
+    const r=await fetch((typeof apiBacktest!=="undefined"?apiBacktest:"../data/backtest_results.json")+"?_="+Date.now());
+    if(!r.ok){
+      document.getElementById("bt-content").innerHTML='<div class="empty-bt"><p>回测数据未生成</p><p><code>python scripts/bt_v34f.py</code></p></div>';
+      return;
+    }
+    const bt=await r.json();
+    _btLoaded=true;
+    const s=bt.summary||{};
+    const stat=(l,v,c)=>'<div class="stat"><div class="label">'+l+'</div><div class="value '+(c||"")+'">'+v+'</div></div>';
+    const cls=v=>v>=0?"up":"down";
+    const fp=v=>(v>=0?"+":"")+(v*100).toFixed(2)+"%";
+    let h='<div class="backtest-grid">';
+    h+=stat("★ 策略总收益",fp(s.strategy_total_return||0),cls(s.strategy_total_return||0));
+    h+=stat("SPY 总收益",fp(s.spy_total_return||0),cls(s.spy_total_return||0));
+    h+=stat("Sharpe",(s.sharpe_ratio||0).toFixed(2));
+    h+=stat("最大回撤",((s.max_drawdown||0)*100).toFixed(2)+"%","down");
+    h+=stat("周胜率",((s.win_rate||0)*100).toFixed(1)+"%");
+    h+=stat("总周数",s.n_weeks||0);
+    h+='</div>';
+    // 横评表
+    const labels={S1:"B&H SPY",S2:"6M-Mom Top3",S3:"Comp Top10",S4:"3-Gate+ATR",S5:"Conviction",S6:"★ S6 Hybrid"};
+    let rows="";
+    for(const k of ["S1","S2","S3","S4","S5","S6"]){
+      const m=s[k+"_metrics"]; if(!m)continue;
+      const star=k==="S6"?' style="background:#1a3a1f;font-weight:600"':"";
+      rows+="<tr"+star+'><td style="padding:6px 12px">'+labels[k]+'</td>'+
+        '<td class="num '+cls(m.total_return||0)+'" style="padding:6px 12px">'+fp(m.total_return||0)+'</td>'+
+        '<td class="num" style="padding:6px 12px">'+(m.sharpe||0).toFixed(2)+'</td>'+
+        '<td class="num down" style="padding:6px 12px">'+((m.max_drawdown||0)*100).toFixed(2)+'%</td>'+
+        '<td class="num" style="padding:6px 12px">'+((m.win_rate||0)*100).toFixed(1)+'%</td></tr>';
+    }
+    h+='<div class="chart-wrap"><h3>策略横评 (★ = 你的策略)</h3><table style="width:100%;font-size:12px"><thead style="background:#1a1f26"><tr><th style="padding:8px 12px;text-align:left">策略</th><th class="num" style="padding:8px 12px">收益</th><th class="num" style="padding:8px 12px">Sharpe</th><th class="num" style="padding:8px 12px">MaxDD</th><th class="num" style="padding:8px 12px">胜率</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    document.getElementById("bt-content").innerHTML=h;
+  }catch(e){
+    document.getElementById("bt-content").innerHTML='<div class="empty-bt">加载失败: '+e.message+'</div>';
+  }
+}
+
+// Boot
 refreshPortfolioCount();
 loadData();
-setInterval(()=>{
-  if(document.getElementById("view-dashboard").classList.contains("active"))loadData();
-}, 60000);
-setInterval(()=>{
-  if(data)document.getElementById("last-updated").textContent="更新于 "+fmtAgo(data.generated_at);
-}, 30000);
+setInterval(()=>{if(document.getElementById("view-dashboard").classList.contains("active"))loadData();},60000);
+setInterval(()=>{if(data){const e=document.getElementById("last-updated");if(e&&e.textContent.indexOf("更新于")===0)e.textContent="更新于 "+fmtAgo(data.generated_at);}},30000);
 </script>
 </body>
 </html>
