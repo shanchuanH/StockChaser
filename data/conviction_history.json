@@ -1,0 +1,786 @@
+{
+  "COHR": [
+    {
+      "date": "2026-05-12",
+      "conv": 97.6,
+      "action": "STRONG_BUY"
+    }
+  ],
+  "VRT": [
+    {
+      "date": "2026-05-12",
+      "conv": 95.3,
+      "action": "BUY"
+    }
+  ],
+  "NVDA": [
+    {
+      "date": "2026-05-12",
+      "conv": 87.0,
+      "action": "BUY"
+    }
+  ],
+  "DELL": [
+    {
+      "date": "2026-05-12",
+      "conv": 86.5,
+      "action": "STRONG_BUY"
+    }
+  ],
+  "APLD": [
+    {
+      "date": "2026-05-12",
+      "conv": 85.4,
+      "action": "BUY"
+    }
+  ],
+  "CSCO": [
+    {
+      "date": "2026-05-12",
+      "conv": 85.3,
+      "action": "STRONG_BUY"
+    }
+  ],
+  "AAOI": [
+    {
+      "date": "2026-05-12",
+      "conv": 84.5,
+      "action": "BUY"
+    }
+  ],
+  "GOOGL": [
+    {
+      "date": "2026-05-12",
+      "conv": 83.9,
+      "action": "BUY"
+    }
+  ],
+  "AXTI": [
+    {
+      "date": "2026-05-12",
+      "conv": 83.5,
+      "action": "BUY"
+    }
+  ],
+  "PWR": [
+    {
+      "date": "2026-05-12",
+      "conv": 83.3,
+      "action": "BUY"
+    }
+  ],
+  "ICHR": [
+    {
+      "date": "2026-05-12",
+      "conv": 83.0,
+      "action": "BUY"
+    }
+  ],
+  "CRDO": [
+    {
+      "date": "2026-05-12",
+      "conv": 82.9,
+      "action": "BUY"
+    }
+  ],
+  "KEYS": [
+    {
+      "date": "2026-05-12",
+      "conv": 82.6,
+      "action": "BUY"
+    }
+  ],
+  "EME": [
+    {
+      "date": "2026-05-12",
+      "conv": 82.3,
+      "action": "BUY"
+    }
+  ],
+  "MU": [
+    {
+      "date": "2026-05-12",
+      "conv": 82.1,
+      "action": "BUY"
+    }
+  ],
+  "MKSI": [
+    {
+      "date": "2026-05-12",
+      "conv": 82.1,
+      "action": "BUY"
+    }
+  ],
+  "MOD": [
+    {
+      "date": "2026-05-12",
+      "conv": 82.0,
+      "action": "BUY"
+    }
+  ],
+  "NVT": [
+    {
+      "date": "2026-05-12",
+      "conv": 81.2,
+      "action": "BUY"
+    }
+  ],
+  "GLW": [
+    {
+      "date": "2026-05-12",
+      "conv": 80.8,
+      "action": "BUY"
+    }
+  ],
+  "SNPS": [
+    {
+      "date": "2026-05-12",
+      "conv": 80.5,
+      "action": "BUY"
+    }
+  ],
+  "MTSI": [
+    {
+      "date": "2026-05-12",
+      "conv": 80.5,
+      "action": "BUY"
+    }
+  ],
+  "MRVL": [
+    {
+      "date": "2026-05-12",
+      "conv": 80.3,
+      "action": "BUY"
+    }
+  ],
+  "CDNS": [
+    {
+      "date": "2026-05-12",
+      "conv": 80.1,
+      "action": "BUY"
+    }
+  ],
+  "OKLO": [
+    {
+      "date": "2026-05-12",
+      "conv": 80.1,
+      "action": "BUY"
+    }
+  ],
+  "BE": [
+    {
+      "date": "2026-05-12",
+      "conv": 79.9,
+      "action": "BUY"
+    }
+  ],
+  "AMD": [
+    {
+      "date": "2026-05-12",
+      "conv": 79.6,
+      "action": "BUY"
+    }
+  ],
+  "AMAT": [
+    {
+      "date": "2026-05-12",
+      "conv": 79.2,
+      "action": "BUY"
+    }
+  ],
+  "ROK": [
+    {
+      "date": "2026-05-12",
+      "conv": 79.0,
+      "action": "BUY"
+    }
+  ],
+  "LRCX": [
+    {
+      "date": "2026-05-12",
+      "conv": 78.9,
+      "action": "BUY"
+    }
+  ],
+  "TTMI": [
+    {
+      "date": "2026-05-12",
+      "conv": 78.9,
+      "action": "BUY"
+    }
+  ],
+  "ROG": [
+    {
+      "date": "2026-05-12",
+      "conv": 78.9,
+      "action": "BUY"
+    }
+  ],
+  "CIEN": [
+    {
+      "date": "2026-05-12",
+      "conv": 78.6,
+      "action": "BUY"
+    }
+  ],
+  "IREN": [
+    {
+      "date": "2026-05-12",
+      "conv": 78.4,
+      "action": "BUY"
+    }
+  ],
+  "NBIS": [
+    {
+      "date": "2026-05-12",
+      "conv": 78.1,
+      "action": "BUY"
+    }
+  ],
+  "POWL": [
+    {
+      "date": "2026-05-12",
+      "conv": 77.8,
+      "action": "BUY"
+    }
+  ],
+  "WDC": [
+    {
+      "date": "2026-05-12",
+      "conv": 77.6,
+      "action": "BUY"
+    }
+  ],
+  "STX": [
+    {
+      "date": "2026-05-12",
+      "conv": 77.6,
+      "action": "BUY"
+    }
+  ],
+  "LNVGY": [
+    {
+      "date": "2026-05-12",
+      "conv": 77.6,
+      "action": "BUY"
+    }
+  ],
+  "ALAB": [
+    {
+      "date": "2026-05-12",
+      "conv": 77.2,
+      "action": "BUY"
+    }
+  ],
+  "MTRN": [
+    {
+      "date": "2026-05-12",
+      "conv": 77.2,
+      "action": "BUY"
+    }
+  ],
+  "QCOM": [
+    {
+      "date": "2026-05-12",
+      "conv": 76.5,
+      "action": "BUY"
+    }
+  ],
+  "ORCL": [
+    {
+      "date": "2026-05-12",
+      "conv": 75.7,
+      "action": "BUY"
+    }
+  ],
+  "AVGO": [
+    {
+      "date": "2026-05-12",
+      "conv": 75.6,
+      "action": "BUY"
+    }
+  ],
+  "NEE": [
+    {
+      "date": "2026-05-12",
+      "conv": 75.4,
+      "action": "BUY"
+    }
+  ],
+  "SNDK": [
+    {
+      "date": "2026-05-12",
+      "conv": 75.2,
+      "action": "BUY"
+    }
+  ],
+  "UEC": [
+    {
+      "date": "2026-05-12",
+      "conv": 75.1,
+      "action": "BUY"
+    }
+  ],
+  "AES": [
+    {
+      "date": "2026-05-12",
+      "conv": 75.1,
+      "action": "BUY"
+    }
+  ],
+  "ARM": [
+    {
+      "date": "2026-05-12",
+      "conv": 75.0,
+      "action": "BUY"
+    }
+  ],
+  "POET": [
+    {
+      "date": "2026-05-12",
+      "conv": 75.0,
+      "action": "BUY"
+    }
+  ],
+  "HPE": [
+    {
+      "date": "2026-05-12",
+      "conv": 73.9,
+      "action": "BUY"
+    }
+  ],
+  "AMZN": [
+    {
+      "date": "2026-05-12",
+      "conv": 73.9,
+      "action": "BUY"
+    }
+  ],
+  "LITE": [
+    {
+      "date": "2026-05-12",
+      "conv": 73.2,
+      "action": "BUY"
+    }
+  ],
+  "AEHR": [
+    {
+      "date": "2026-05-12",
+      "conv": 72.6,
+      "action": "BUY"
+    }
+  ],
+  "LSCC": [
+    {
+      "date": "2026-05-12",
+      "conv": 72.5,
+      "action": "BUY"
+    }
+  ],
+  "BEP": [
+    {
+      "date": "2026-05-12",
+      "conv": 72.3,
+      "action": "BUY"
+    }
+  ],
+  "INTC": [
+    {
+      "date": "2026-05-12",
+      "conv": 72.1,
+      "action": "BUY"
+    }
+  ],
+  "SMTC": [
+    {
+      "date": "2026-05-12",
+      "conv": 72.1,
+      "action": "BUY"
+    }
+  ],
+  "HUT": [
+    {
+      "date": "2026-05-12",
+      "conv": 72.1,
+      "action": "BUY"
+    }
+  ],
+  "VIAV": [
+    {
+      "date": "2026-05-12",
+      "conv": 72.1,
+      "action": "BUY"
+    }
+  ],
+  "SMCI": [
+    {
+      "date": "2026-05-12",
+      "conv": 71.9,
+      "action": "TRY_BUY"
+    }
+  ],
+  "GEV": [
+    {
+      "date": "2026-05-12",
+      "conv": 70.9,
+      "action": "TRY_BUY"
+    }
+  ],
+  "ASML": [
+    {
+      "date": "2026-05-12",
+      "conv": 70.7,
+      "action": "TRY_BUY"
+    }
+  ],
+  "RMBS": [
+    {
+      "date": "2026-05-12",
+      "conv": 69.9,
+      "action": "TRY_BUY"
+    }
+  ],
+  "FLNC": [
+    {
+      "date": "2026-05-12",
+      "conv": 69.9,
+      "action": "TRY_BUY"
+    }
+  ],
+  "MXL": [
+    {
+      "date": "2026-05-12",
+      "conv": 69.8,
+      "action": "TRY_BUY"
+    }
+  ],
+  "ACMR": [
+    {
+      "date": "2026-05-12",
+      "conv": 69.6,
+      "action": "TRY_BUY"
+    }
+  ],
+  "TSM": [
+    {
+      "date": "2026-05-12",
+      "conv": 69.4,
+      "action": "TRY_BUY"
+    }
+  ],
+  "ENPH": [
+    {
+      "date": "2026-05-12",
+      "conv": 69.4,
+      "action": "TRY_BUY"
+    }
+  ],
+  "PLUG": [
+    {
+      "date": "2026-05-12",
+      "conv": 68.9,
+      "action": "TRY_BUY"
+    }
+  ],
+  "LASR": [
+    {
+      "date": "2026-05-12",
+      "conv": 68.7,
+      "action": "TRY_BUY"
+    }
+  ],
+  "EQIX": [
+    {
+      "date": "2026-05-12",
+      "conv": 68.0,
+      "action": "TRY_BUY"
+    }
+  ],
+  "TLN": [
+    {
+      "date": "2026-05-12",
+      "conv": 67.6,
+      "action": "TRY_BUY"
+    }
+  ],
+  "KLAC": [
+    {
+      "date": "2026-05-12",
+      "conv": 66.3,
+      "action": "TRY_BUY"
+    }
+  ],
+  "DLR": [
+    {
+      "date": "2026-05-12",
+      "conv": 66.2,
+      "action": "TRY_BUY"
+    }
+  ],
+  "HXL": [
+    {
+      "date": "2026-05-12",
+      "conv": 65.7,
+      "action": "TRY_BUY"
+    }
+  ],
+  "NNE": [
+    {
+      "date": "2026-05-12",
+      "conv": 65.6,
+      "action": "TRY_BUY"
+    }
+  ],
+  "FCEL": [
+    {
+      "date": "2026-05-12",
+      "conv": 63.9,
+      "action": "TRY_BUY"
+    }
+  ],
+  "IDA": [
+    {
+      "date": "2026-05-12",
+      "conv": 63.8,
+      "action": "TRY_BUY"
+    }
+  ],
+  "SMR": [
+    {
+      "date": "2026-05-12",
+      "conv": 61.9,
+      "action": "TRY_BUY"
+    }
+  ],
+  "ONTO": [
+    {
+      "date": "2026-05-12",
+      "conv": 61.8,
+      "action": "TRY_BUY"
+    }
+  ],
+  "UCTT": [
+    {
+      "date": "2026-05-12",
+      "conv": 59.5,
+      "action": "TRY_BUY"
+    }
+  ],
+  "WULF": [
+    {
+      "date": "2026-05-12",
+      "conv": 58.9,
+      "action": "TRY_BUY"
+    }
+  ],
+  "ETN": [
+    {
+      "date": "2026-05-12",
+      "conv": 58.6,
+      "action": "TRY_BUY"
+    }
+  ],
+  "MSFT": [
+    {
+      "date": "2026-05-12",
+      "conv": 58.3,
+      "action": "TRY_BUY"
+    }
+  ],
+  "CCJ": [
+    {
+      "date": "2026-05-12",
+      "conv": 58.3,
+      "action": "TRY_BUY"
+    }
+  ],
+  "ENTG": [
+    {
+      "date": "2026-05-12",
+      "conv": 57.9,
+      "action": "WATCH"
+    }
+  ],
+  "D": [
+    {
+      "date": "2026-05-12",
+      "conv": 57.5,
+      "action": "WATCH"
+    }
+  ],
+  "DNN": [
+    {
+      "date": "2026-05-12",
+      "conv": 56.3,
+      "action": "WATCH"
+    }
+  ],
+  "AEP": [
+    {
+      "date": "2026-05-12",
+      "conv": 56.3,
+      "action": "WATCH"
+    }
+  ],
+  "VST": [
+    {
+      "date": "2026-05-12",
+      "conv": 55.1,
+      "action": "WATCH"
+    }
+  ],
+  "DUK": [
+    {
+      "date": "2026-05-12",
+      "conv": 54.9,
+      "action": "WATCH"
+    }
+  ],
+  "SO": [
+    {
+      "date": "2026-05-12",
+      "conv": 54.9,
+      "action": "WATCH"
+    }
+  ],
+  "PEG": [
+    {
+      "date": "2026-05-12",
+      "conv": 54.0,
+      "action": "WATCH"
+    }
+  ],
+  "CIFR": [
+    {
+      "date": "2026-05-12",
+      "conv": 53.9,
+      "action": "WATCH"
+    }
+  ],
+  "CRWV": [
+    {
+      "date": "2026-05-12",
+      "conv": 53.4,
+      "action": "WATCH"
+    }
+  ],
+  "META": [
+    {
+      "date": "2026-05-12",
+      "conv": 52.1,
+      "action": "WATCH"
+    }
+  ],
+  "CEG": [
+    {
+      "date": "2026-05-12",
+      "conv": 52.0,
+      "action": "WATCH"
+    }
+  ],
+  "AYI": [
+    {
+      "date": "2026-05-12",
+      "conv": 51.6,
+      "action": "WATCH"
+    }
+  ],
+  "CAMT": [
+    {
+      "date": "2026-05-12",
+      "conv": 50.6,
+      "action": "WATCH"
+    }
+  ],
+  "FN": [
+    {
+      "date": "2026-05-12",
+      "conv": 50.5,
+      "action": "WATCH"
+    }
+  ],
+  "BWXT": [
+    {
+      "date": "2026-05-12",
+      "conv": 50.1,
+      "action": "WATCH"
+    }
+  ],
+  "EXC": [
+    {
+      "date": "2026-05-12",
+      "conv": 48.4,
+      "action": "WATCH"
+    }
+  ],
+  "LEU": [
+    {
+      "date": "2026-05-12",
+      "conv": 48.1,
+      "action": "WATCH"
+    }
+  ],
+  "CWEN": [
+    {
+      "date": "2026-05-12",
+      "conv": 48.0,
+      "action": "WATCH"
+    }
+  ],
+  "ANET": [
+    {
+      "date": "2026-05-12",
+      "conv": 47.9,
+      "action": "WATCH"
+    }
+  ],
+  "BEPC": [
+    {
+      "date": "2026-05-12",
+      "conv": 47.7,
+      "action": "WATCH"
+    }
+  ],
+  "HE": [
+    {
+      "date": "2026-05-12",
+      "conv": 47.7,
+      "action": "WATCH"
+    }
+  ],
+  "APH": [
+    {
+      "date": "2026-05-12",
+      "conv": 46.9,
+      "action": "WATCH"
+    }
+  ],
+  "HUBB": [
+    {
+      "date": "2026-05-12",
+      "conv": 46.5,
+      "action": "WATCH"
+    }
+  ],
+  "IBM": [
+    {
+      "date": "2026-05-12",
+      "conv": 43.6,
+      "action": "WATCH"
+    }
+  ],
+  "IPGP": [
+    {
+      "date": "2026-05-12",
+      "conv": 43.0,
+      "action": "WATCH"
+    }
+  ],
+  "NRG": [
+    {
+      "date": "2026-05-12",
+      "conv": 35.6,
+      "action": "AVOID"
+    }
+  ]
+}
