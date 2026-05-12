@@ -794,15 +794,15 @@ function renderPortfolioView(){
         html+='<div style="font-size:15px;font-weight:700;color:'+c.verb_color+'">'+c.action_text+'</div>';
         html+='<div style="font-size:11px;color:#c9d1d9;margin-top:3px">'+c.reason+'</div>';
         // Always-on 止损规则速查 (一目了然: 全清 vs 减半)
-        const stop_p = h.buy_price * 0.92;
+        const stop_p = c.h.buy_price * 0.92;
         const ret_now = c.ret;
         let stop_rule = '';
         if(ret_now <= -8){
-          stop_rule = '<strong style="color:#ff6b6b">🛑 已跌破 -8% → 立即一次性全清 '+h.shares+' 股</strong>';
+          stop_rule = '<strong style="color:#ff6b6b">🛑 已跌破 -8% → 立即一次性全清 '+c.h.shares+' 股</strong>';
         } else {
-          stop_rule = '🛑 跌到 <strong>$'+stop_p.toFixed(2)+'</strong> (-8%) → <strong>一次性全清 '+h.shares+' 股</strong>';
+          stop_rule = '🛑 跌到 <strong>$'+stop_p.toFixed(2)+'</strong> (-8%) → <strong>一次性全清 '+c.h.shares+' 股</strong>';
           if(c.r && c.r.conviction_score < 60){
-            stop_rule += '<br>⚠️ Conv 跌破 45 → <strong>卖一半 '+Math.floor(h.shares/2)+' 股</strong>';
+            stop_rule += '<br>⚠️ Conv 跌破 45 → <strong>卖一半 '+Math.floor(c.h.shares/2)+' 股</strong>';
           }
         }
         html+='<div style="font-size:10.5px;color:#f39c12;margin-top:5px;padding-top:5px;border-top:1px dashed #444">'+stop_rule+'</div>';
@@ -1005,4 +1005,3 @@ setInterval(()=>{if(document.getElementById("view-dashboard").classList.contains
 setInterval(()=>{if(data){const e=document.getElementById("last-updated");if(e&&e.textContent.indexOf("更新于")===0)e.textContent="更新于 "+fmtAgo(data.generated_at);}},30000);
 </script>
 </body>
-</html>
