@@ -468,7 +468,7 @@ def main():
             "risk-off"
         ),
         "is_mock": prices.get("is_mock", False),
-        "engine_version": "v3.2",
+        "engine_version": "v3.5",
         "signal_meta": SIGNAL_META,
         "action_meta": ACTION_META,
         "horizon_meta": HORIZON_META,

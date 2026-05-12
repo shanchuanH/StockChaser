@@ -38,12 +38,29 @@ except ImportError:
 DATA.mkdir(exist_ok=True)
 
 
-def _seed_data_dir():
-    """Copy seed files (e.g. universe.json) into DATA if missing.
+SEED_ALWAYS_REFRESH = {
+    # Regenerated locally (e.g. by bt_v36.py) and pushed via git.
+    # Render's persistent disk caches the old copy → must overwrite when
+    # the seed file in git is newer, otherwise the dashboard freezes on
+    # the version from the first deploy.
+    "backtest_results.json",
+}
 
-    Needed because Render Persistent Disks mount empty volumes over the
-    data/ directory, hiding any files committed in git. Seed files live
-    outside the mount point and are copied in on cold start.
+
+def _seed_data_dir():
+    """Bootstrap data/ from data_seed/ on container start.
+
+    Render mounts an empty persistent disk over data/, which hides any
+    files baked into the git build. We seed canonical files from
+    data_seed/ which lives outside the mount.
+
+    Two flavors:
+      - user-mutable (universe.json, portfolio.json, my_holdings.json):
+        copy only if absent so server-side edits via /api/* survive
+        across deploys.
+      - always-refresh (backtest_results.json): overwrite when the seed
+        mtime is newer than the on-disk mtime so new local backtests
+        actually reach Render.
     """
     if not SEED.exists():
         return
@@ -52,12 +69,17 @@ def _seed_data_dir():
         if not src.is_file():
             continue
         dst = DATA / src.name
-        if not dst.exists():
-            try:
+        try:
+            if src.name in SEED_ALWAYS_REFRESH:
+                # Overwrite when the bundled seed is newer (or disk missing)
+                if not dst.exists() or src.stat().st_mtime > dst.stat().st_mtime:
+                    shutil.copy2(src, dst)
+                    print(f"refreshed {dst.name} from data_seed/ (always-refresh)")
+            elif not dst.exists():
                 shutil.copy2(src, dst)
                 print(f"seeded {dst.name} from data_seed/")
-            except Exception as exc:
-                print(f"seed copy failed for {src.name}: {exc}")
+        except Exception as exc:
+            print(f"seed copy failed for {src.name}: {exc}")
 
 
 _seed_data_dir()
