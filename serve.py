@@ -300,6 +300,69 @@ def api_holdings_update_shares():
         return jsonify({"ok": True})
 
 
+@app.route("/api/portfolio_config", methods=["GET", "POST"])
+def api_portfolio_config():
+    """Read or update data/portfolio.json (cash / max positions / risk%)."""
+    fp = DATA / "portfolio.json"
+    if request.method == "GET":
+        if not fp.exists():
+            return jsonify({})
+        try:
+            return jsonify(json.loads(fp.read_text(encoding="utf-8")))
+        except Exception:
+            return jsonify({})
+    body = request.get_json(force=True, silent=True) or {}
+    with _holdings_lock:
+        cfg = {}
+        if fp.exists():
+            try:
+                cfg = json.loads(fp.read_text(encoding="utf-8"))
+            except Exception:
+                cfg = {}
+        for k in ("portfolio_cash_usd", "account_total_usd",
+                  "max_positions", "risk_per_trade_pct",
+                  "max_position_size_pct"):
+            if k in body:
+                try:
+                    cfg[k] = float(body[k]) if isinstance(body[k], (int, float, str)) else body[k]
+                except (TypeError, ValueError):
+                    pass
+        fp.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        return jsonify({"ok": True, "config": cfg})
+
+
+@app.route("/api/conviction_history")
+def api_conviction_history():
+    fp = DATA / "conviction_history.json"
+    if not fp.exists():
+        return jsonify({})
+    return Response(fp.read_text(encoding="utf-8"), mimetype="application/json")
+
+
+@app.route("/api/holdings/edit", methods=["POST"])
+def api_holdings_edit():
+    """Edit individual fields of an existing holding (fix data errors)."""
+    body = request.get_json(force=True, silent=True) or {}
+    ticker = (body.get("ticker") or "").upper()
+    if not ticker:
+        return jsonify({"error": "ticker required"}), 400
+    with _holdings_lock:
+        pf = _load_holdings()
+        if ticker not in pf:
+            return jsonify({"error": "not held"}), 404
+        h = pf[ticker]
+        if "buy_price" in body:
+            try: h["buy_price"] = round(float(body["buy_price"]), 4)
+            except (TypeError, ValueError): pass
+        if "shares" in body:
+            try: h["shares"] = float(body["shares"])
+            except (TypeError, ValueError): pass
+        if "buy_date" in body:
+            h["buy_date"] = str(body["buy_date"])[:10]
+        _save_holdings(pf)
+        return jsonify({"ok": True, "holding": h})
+
+
 @app.route("/api/holdings/remove", methods=["POST", "DELETE"])
 def api_holdings_remove():
     body = request.get_json(force=True, silent=True) or {}

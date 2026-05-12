@@ -113,28 +113,48 @@ def build_playbook(row, config=None):
     # Entry plan — split target across configured batches
     batches = config.get("entry_batches", DEFAULT_CONFIG["entry_batches"])
     total_weight = sum(b["weight_pct"] for b in batches)
-    entry_plan = []
     high_4w = row.get("high_4w") or price * 1.05
-    for i, b in enumerate(batches):
-        frac = b["weight_pct"] / total_weight
-        batch_cash = total_cash * frac
-        if b["step"] == 1:
-            batch_price = price
-            trigger = b["trigger"]
-        elif b["step"] == 2:
-            batch_price = round(price * 1.03, 2)
-            trigger = f"涨至 ${batch_price:.2f} (+3%) 且未跌破 SMA10"
-        else:
-            batch_price = round(max(high_4w, price * 1.06), 2)
-            trigger = f"突破 ${batch_price:.2f} (4W 高 或 +6%)"
+    entry_plan = []
+
+    # Fix 1: Single-batch fallback for high-priced stocks.
+    # If target_shares < 3 (typical for stocks > $500 with $20K portfolio),
+    # splitting into 3 batches gives 0/0/1 — buy all upfront instead.
+    if total_shares < 3:
+        # Pump everything into batch 1
         entry_plan.append({
-            "step": b["step"],
-            "trigger": trigger,
-            "weight_pct": round(frac * target_pct * 100, 2),
-            "price": batch_price,
-            "shares": _shares(batch_cash, batch_price),
-            "cash": round(batch_cash, 2),
+            "step": 1,
+            "trigger": "立即买入（高价股一次性建仓）",
+            "weight_pct": round(target_pct * 100, 2),
+            "price": price,
+            "shares": max(1, total_shares),
+            "cash": round(total_cash, 2),
+            "single_batch": True,
         })
+    else:
+        for b in batches:
+            frac = b["weight_pct"] / total_weight
+            batch_cash = total_cash * frac
+            if b["step"] == 1:
+                batch_price = price
+                trigger = b["trigger"]
+            elif b["step"] == 2:
+                batch_price = round(price * 1.03, 2)
+                trigger = f"涨至 ${batch_price:.2f} (+3%) 且未跌破 SMA10"
+            else:
+                batch_price = round(max(high_4w, price * 1.06), 2)
+                trigger = f"突破 ${batch_price:.2f} (4W 高 或 +6%)"
+            # Ensure at least 1 share per batch if there's cash
+            shares = _shares(batch_cash, batch_price)
+            if shares == 0 and batch_cash >= batch_price * 0.5:
+                shares = 1
+            entry_plan.append({
+                "step": b["step"],
+                "trigger": trigger,
+                "weight_pct": round(frac * target_pct * 100, 2),
+                "price": batch_price,
+                "shares": shares,
+                "cash": round(batch_cash, 2),
+            })
 
     # Stop ladder — turn each rule into a concrete price
     stop_ladder = []

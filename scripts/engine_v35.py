@@ -483,7 +483,27 @@ def main():
         "rows": rows,
     }
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"v3.2 wrote {len(rows)} rows -> {OUT}")
+
+    # ---- Append to conviction_history.json (for portfolio sparklines) ----
+    hist_path = ROOT / "data" / "conviction_history.json"
+    try:
+        hist = json.loads(hist_path.read_text(encoding="utf-8")) if hist_path.exists() else {}
+    except Exception:
+        hist = {}
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    for r in rows:
+        t = r["ticker"]
+        series = hist.setdefault(t, [])
+        # Don't append duplicate entries on the same day
+        if series and series[-1].get("date") == today:
+            series[-1] = {"date": today, "conv": r["conviction_score"], "action": r["action"]}
+        else:
+            series.append({"date": today, "conv": r["conviction_score"], "action": r["action"]})
+        # Cap each series at 90 entries (~3 months daily, longer if weekly)
+        if len(series) > 90:
+            hist[t] = series[-90:]
+    hist_path.write_text(json.dumps(hist, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"v3.5 wrote {len(rows)} rows -> {OUT}")
     print(f"Regime modifier: {rm}  ({out['regime_label']})")
 
     actions = Counter(r["action"] for r in rows)

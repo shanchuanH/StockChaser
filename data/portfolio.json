@@ -1,6 +1,7 @@
 {
   "_comment": "StockChaser 个人化配置 — 改这里就改全局策略",
   "portfolio_cash_usd": 20000,
+  "account_total_usd": 97000,
   "max_positions": 10,
   "cash_buffer_pct": 10,
   "risk_per_trade_pct": 1.5,
