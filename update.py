@@ -23,7 +23,7 @@ USE_MOCK = "--mock" in sys.argv
 
 steps = [
     ("抓取价格数据",   [sys.executable, str(SCRIPTS / ("fetch_mock.py" if USE_MOCK else "fetch_data.py"))]),
-    ("计算追涨信号",   [sys.executable, str(SCRIPTS / "engine_v32.py")]),
+    ("计算追涨信号",   [sys.executable, str(SCRIPTS / "engine_v34.py")]),
 ]
 
 for name, cmd in steps:

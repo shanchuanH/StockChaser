@@ -91,7 +91,7 @@ def in_market_hours(now_utc):
 
 def run_pipeline(use_mock=False):
     fetch_script = "fetch_mock.py" if use_mock else "fetch_data.py"
-    steps = [SCRIPTS / fetch_script, SCRIPTS / "engine_v32.py"]
+    steps = [SCRIPTS / fetch_script, SCRIPTS / "engine_v34.py"]
     for s in steps:
         try:
             r = subprocess.run(

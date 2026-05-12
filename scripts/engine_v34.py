@@ -295,12 +295,56 @@ def apply_per_layer_cap(rows):
     return rows
 
 
-def apply_priority_rank(rows):
-    strong = [r for r in rows if r["action"] == "STRONG_BUY"]
-    for i, r in enumerate(strong, start=1):
+def apply_priority_rank(rows, prev_priority_set=None):
+    """Assign PRIORITY ranks with optional hysteresis from prior run.
+
+    If a ticker was in last week's PRIORITY and its action is still BUY+ AND
+    conviction >= PRIORITY_EXIT_THRESHOLD (60), keep it in PRIORITY ahead of
+    fresh STRONG_BUY candidates. This dampens week-to-week churn.
+    """
+    PRIORITY_EXIT_CONV = 60  # held priority kept while conv >= this
+    prev_priority_set = prev_priority_set or set()
+    # Eligible pool: STRONG_BUY ∪ (prev_priority still BUY+ with conv >= exit)
+    eligible = []
+    seen = set()
+    # Start with prior priority tickers that still qualify (sticky)
+    for r in rows:
+        if r["ticker"] in prev_priority_set \
+                and r["action"] in ("STRONG_BUY", "BUY") \
+                and r["conviction_score"] >= PRIORITY_EXIT_CONV:
+            eligible.append((r, True))
+            seen.add(r["ticker"])
+    # Then fresh STRONG_BUY (not already in sticky)
+    for r in rows:
+        if r["action"] == "STRONG_BUY" and r["ticker"] not in seen:
+            eligible.append((r, False))
+            seen.add(r["ticker"])
+    # Sort sticky-first, then by conviction desc within group
+    eligible.sort(key=lambda x: (not x[1], -x[0]["conviction_score"]))
+    for i, (r, was_priority) in enumerate(eligible, start=1):
         r["priority_rank"] = i
         r["is_priority"] = i <= PRIORITY_TOP_N
+        r["priority_sticky"] = was_priority
+    # Strong_buy not in priority should still have rank
+    rank = len(eligible) + 1
+    for r in rows:
+        if r.get("priority_rank") is None and r["action"] == "STRONG_BUY":
+            r["priority_rank"] = rank
+            r["is_priority"] = False
+            r["priority_sticky"] = False
+            rank += 1
     return rows
+
+
+def load_prior_priority():
+    """Read prior signals.json (if exists) and return set of last priority tickers."""
+    if not OUT.exists():
+        return set()
+    try:
+        prior = json.loads(OUT.read_text(encoding="utf-8"))
+        return {r["ticker"] for r in prior.get("rows", []) if r.get("is_priority")}
+    except Exception:
+        return set()
 
 
 def main():
@@ -374,7 +418,8 @@ def main():
         r["rank"] = i
 
     rows = apply_per_layer_cap(rows)
-    rows = apply_priority_rank(rows)
+    prev_priority = load_prior_priority()  # hysteresis carry-over
+    rows = apply_priority_rank(rows, prev_priority_set=prev_priority)
 
     out = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

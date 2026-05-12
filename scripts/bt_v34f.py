@@ -281,18 +281,25 @@ def run():
                         weighted_ret += (cl[di] / h["entry_price"] - 1) * h["weight"]
                 eq["S5"].append(eq["S5"][-1] * (1 + weighted_ret - 2 * TXN_COST * total_weight))
 
-            # S6 weighted (6M-Mom × Conviction hybrid)
+            # S6 weighted (v3.4f hybrid + stability)
+            # Realize 1-WEEK return using last_price (not original entry_price)
             basket6 = holdings["S6"]
             if not basket6:
                 eq["S6"].append(eq["S6"][-1])
             else:
                 weighted_ret = 0.0
-                total_weight = sum(h.get("weight", 0) for h in basket6)
+                txn_weight = 0.0  # only NEW or refreshed positions pay txn cost
                 for h in basket6:
                     cl = close_arr[h["ticker"]]
                     if di < len(cl) and not math.isnan(cl[di]):
-                        weighted_ret += (cl[di] / h["entry_price"] - 1) * h["weight"]
-                eq["S6"].append(eq["S6"][-1] * (1 + weighted_ret - 2 * TXN_COST * total_weight))
+                        base_price = h.get("last_price", h["entry_price"])
+                        weighted_ret += (cl[di] / base_price - 1) * h["weight"]
+                        # update last_price after realizing
+                        h["last_price"] = cl[di]
+                        if h.get("entry_week_idx", -1) == w_idx - 1:
+                            # this was a new entry last week -> pays txn cost on rebuild
+                            txn_weight += h["weight"]
+                eq["S6"].append(eq["S6"][-1] * (1 + weighted_ret - 2 * TXN_COST * txn_weight))
         # Align lengths
         target_len = w_idx + 1
         for k in eq:
@@ -363,39 +370,60 @@ def run():
             total_alloc += w
         holdings["S5"] = s5_basket
 
-        # S6: 6M-Mom × Conviction hybrid (the new ★ final strategy)
-        # Filter: conviction >= 50 AND 6M-mom >= 0.01 (1%/month minimum)
-        # Rank by 6M-mom DESC within eligible pool
-        # Layer cap: max 2 per layer
-        # Weighting: top 3 -> 12%, next 3 -> 8%, rest -> 4%
-        s6_eligible = []
-        for t, cv, lk in s5_cands:
-            if cv < 50:
-                continue
-            avg6m = feats[t].get("avg6m")
-            if avg6m is None or avg6m < 0.01:
-                continue
-            s6_eligible.append((t, avg6m, cv, lk))
-        s6_eligible.sort(key=lambda x: x[1], reverse=True)
-        s6_basket = []
+        # S6 v3.4f: 6M-Mom x Conviction hybrid + stability
+        #   - min_hold=4 weeks (forced minimum hold period)
+        #   - hysteresis: held positions kept while conv>=45 (new entry requires >=50)
+        #   - layer cap 2, tiered weights 12%/8%/4%
+        MIN_HOLD = 4
+        EXIT_CONV = 45
+        # Step 1: keep prior holdings that pass hysteresis or min_hold
+        prev_basket = holdings.get("S6", [])
+        kept = []
         layer_count_s6 = {}
-        total_alloc6 = 0.0
-        for t, mom, cv, lk in s6_eligible:
-            if len(s6_basket) >= 8 or total_alloc6 >= 0.85:
-                break
-            if layer_count_s6.get(lk, 0) >= 2:
+        for h in prev_basket:
+            t = h["ticker"]
+            if t not in feats:
                 continue
-            tier_idx = len(s6_basket)
-            if tier_idx < 3:    w = 0.12
-            elif tier_idx < 6:  w = 0.08
-            else:                w = 0.04
-            if total_alloc6 + w > 0.85:
-                w = 0.85 - total_alloc6
-            s6_basket.append({"ticker": t, "entry_price": feats[t]["close"],
-                              "weight": w, "conviction": cv, "mom6m": mom})
+            held_weeks = w_idx - h.get("entry_week_idx", w_idx)
+            if held_weeks < MIN_HOLD or feats[t]["comp"] >= EXIT_CONV:
+                lk = by_ticker[t]["layer"].split("·")[0]
+                kept.append({
+                    "ticker": t, "entry_price": h["entry_price"],
+                    "entry_week_idx": h.get("entry_week_idx", w_idx),
+                    "last_price": h.get("last_price", h["entry_price"]),
+                    "weight": h.get("weight", 0.04),
+                    "conviction": feats[t]["comp"],
+                    "mom6m": feats[t].get("avg6m") or 0,
+                    "lk": lk,
+                })
+                layer_count_s6[lk] = layer_count_s6.get(lk, 0) + 1
+        # Step 2: fill remaining slots with new candidates
+        kept_ticks = {h["ticker"] for h in kept}
+        new_eligible = []
+        for t, cv, lk in s5_cands:
+            if t in kept_ticks: continue
+            if cv < 50: continue
+            avg6m = feats[t].get("avg6m")
+            if avg6m is None or avg6m < 0.01: continue
+            new_eligible.append((t, avg6m, cv, lk))
+        new_eligible.sort(key=lambda x: x[1], reverse=True)
+        for t, mom, cv, lk in new_eligible:
+            if len(kept) >= 8: break
+            if layer_count_s6.get(lk, 0) >= 2: continue
+            kept.append({
+                "ticker": t, "entry_price": feats[t]["close"],
+                "entry_week_idx": w_idx, "weight": 0.04,
+                "last_price": feats[t]["close"],
+                "conviction": cv, "mom6m": mom, "lk": lk,
+            })
             layer_count_s6[lk] = layer_count_s6.get(lk, 0) + 1
-            total_alloc6 += w
-        holdings["S6"] = s6_basket
+        # Step 3: assign tier weights by mom6m DESC
+        kept.sort(key=lambda h: (-h.get("mom6m", 0), -h.get("conviction", 0)))
+        for tier_idx, h in enumerate(kept[:8]):
+            if tier_idx < 3: h["weight"] = 0.12
+            elif tier_idx < 6: h["weight"] = 0.08
+            else: h["weight"] = 0.04
+        holdings["S6"] = kept[:8]
 
         # Last week snapshot
         if w_idx == len(bt_weeks) - 1:

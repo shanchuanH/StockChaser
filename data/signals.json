@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-11T04:57:12Z",
+  "generated_at": "2026-05-11T16:49:31Z",
   "spy_4w_return_pct": 8.56,
   "spy_above_sma50": true,
   "regime_modifier": 1.1,
@@ -235,7 +235,8 @@
       ],
       "is_priority": true,
       "priority_rank": 1,
-      "rank": 1
+      "rank": 1,
+      "priority_sticky": true
     },
     {
       "ticker": "COHR",
@@ -499,7 +500,8 @@
       ],
       "is_priority": true,
       "priority_rank": 2,
-      "rank": 5
+      "rank": 5,
+      "priority_sticky": true
     },
     {
       "ticker": "MOD",
@@ -1566,7 +1568,8 @@
       ],
       "is_priority": true,
       "priority_rank": 3,
-      "rank": 21
+      "rank": 21,
+      "priority_sticky": true
     },
     {
       "ticker": "KLAC",
