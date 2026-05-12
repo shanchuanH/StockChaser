@@ -660,28 +660,39 @@ function renderPortfolioView(){
       const personal_stop = h.buy_price * 0.92;
       if(px <= personal_stop){
         verb="SELL"; verb_color="#d63031";
-        action_text="🛑 全清 "+h.shares+" 股";
+        action_text="🛑 全清 "+h.shares+" 股 (100%)";
         reason="跌穿你买入价 $"+h.buy_price.toFixed(2)+" 的 -8% 止损 $"+personal_stop.toFixed(2);
       }else if(conv<45){
         verb="SELL"; verb_color="#f39c12";
-        action_text="⚠️ 卖 "+Math.floor(h.shares/2)+" 股";
-        reason="Conv "+conv+" < 45";
+        action_text="⚠️ 卖一半 "+Math.floor(h.shares/2)+" 股 (50%)";
+        reason="Conv "+conv+" < 45，仓位减半";
       }else if(ret>=30){
         verb="SELL"; verb_color="#3fb950";
-        action_text="💰 卖 "+Math.floor(h.shares*0.33)+" 股";
-        reason="+"+ret.toFixed(1)+"% 锁 1/3 利润";
+        const sellN = Math.floor(h.shares*0.33);
+        action_text="💰 卖 "+sellN+" 股 (33%)";
+        reason="+"+ret.toFixed(1)+"% 锁利润，剩 "+(h.shares-sellN)+" 股骑趋势";
+      }else if(ret>=20){
+        verb="SELL"; verb_color="#3fb950";
+        const sellN = Math.floor(h.shares*0.25);
+        action_text="💰 卖 "+sellN+" 股 (25%)";
+        reason="+"+ret.toFixed(1)+"% 第二档止盈，剩 "+(h.shares-sellN)+" 股";
       }else if(pb && pb.entry_plan && h.batches && h.batches.length<pb.entry_plan.length){
         const next=pb.entry_plan[h.batches.length];
         if(next && px>=next.price*0.99){
           verb="BUY"; verb_color="#3fb950";
-          action_text="➕ 加仓 "+next.shares+" 股";
-          reason="到第 "+next.step+" 批加仓点 $"+next.price;
+          const buyCash = (next.shares * next.price).toFixed(0);
+          action_text="➕ 加仓 "+next.shares+" 股 (≈$"+buyCash+")";
+          reason="第 "+next.step+" 批加仓点 $"+next.price+" 已触发";
         }
       }
       if(verb==="HOLD"){
-        if(ret>=10){ verb_color="#3fb950"; action_text="⬆️ 上调止损"; reason="+"+ret.toFixed(1)+"%，止损 $"+(h.buy_price*1.05).toFixed(2); }
-        else if(ret<-3){ verb_color="#f39c12"; action_text="👀 盯紧止损"; reason=ret.toFixed(1)+"%，接近止损线"; }
-        else { action_text="✓ 持有"; reason="新仓发酵中"; }
+        if(ret>=10){
+          verb_color="#3fb950";
+          action_text="⬆️ 卖 "+Math.floor(h.shares*0.25)+" 股 (25%) 锁首档利润";
+          reason="+"+ret.toFixed(1)+"%，第一档止盈触发，止损上移到买入价 $"+h.buy_price.toFixed(2);
+        }
+        else if(ret<-3){ verb_color="#f39c12"; action_text="👀 盯紧止损 (-8% = $"+personal_stop.toFixed(2)+")"; reason=ret.toFixed(1)+"%，接近止损线"; }
+        else { action_text="✓ 持有不动"; reason="新仓发酵中，未触发任何买卖点"; }
       }
     }
     cards.push({t,h,r,px,cost,val,ret,verb,verb_color,action_text,reason});
@@ -793,20 +804,37 @@ function renderPortfolioView(){
         html+='<div style="background:'+c.verb_color+'22;border-radius:5px;padding:8px 12px;margin-bottom:8px">';
         html+='<div style="font-size:15px;font-weight:700;color:'+c.verb_color+'">'+c.action_text+'</div>';
         html+='<div style="font-size:11px;color:#c9d1d9;margin-top:3px">'+c.reason+'</div>';
-        // Always-on 止损规则速查 (一目了然: 全清 vs 减半)
-        const stop_p = c.h.buy_price * 0.92;
-        const ret_now = c.ret;
-        let stop_rule = '';
-        if(ret_now <= -8){
-          stop_rule = '<strong style="color:#ff6b6b">🛑 已跌破 -8% → 立即一次性全清 '+c.h.shares+' 股</strong>';
-        } else {
-          stop_rule = '🛑 跌到 <strong>$'+stop_p.toFixed(2)+'</strong> (-8%) → <strong>一次性全清 '+c.h.shares+' 股</strong>';
-          if(c.r && c.r.conviction_score < 60){
-            stop_rule += '<br>⚠️ Conv 跌破 45 → <strong>卖一半 '+Math.floor(c.h.shares/2)+' 股</strong>';
-          }
-        }
-        html+='<div style="font-size:10.5px;color:#f39c12;margin-top:5px;padding-top:5px;border-top:1px dashed #444">'+stop_rule+'</div>';
         html+='</div>';
+
+        // ====== 止盈 + 止损 完整阶梯 (基于你的买入价) ======
+        const buyP = c.h.buy_price;
+        const totShares = c.h.shares;
+        const stop_p_full = buyP * 0.92;
+        const tp1_p = buyP * 1.10;
+        const tp2_p = buyP * 1.20;
+        const tp3_p = buyP * 1.30;
+        const tp1_n = Math.floor(totShares * 0.25);
+        const tp2_n = Math.floor(totShares * 0.33);
+        const half_n = Math.floor(totShares / 2);
+        const hit = (target) => c.px >= target;
+        const lossHit = c.px <= stop_p_full;
+        // Status emoji per row
+        const mark = (done) => done ? '✅' : '⏳';
+        html+='<div style="background:#0d1218;border:1px solid #21262d;border-radius:5px;padding:8px 10px;margin-bottom:8px;font-size:10.5px">';
+        html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><strong style="color:#3fb950">📊 止盈阶梯</strong><span style="color:#8b949e;font-size:9.5px">(基于你买入价 $'+buyP.toFixed(2)+')</span></div>';
+        html+='<div style="display:grid;grid-template-columns:auto auto 1fr auto;column-gap:8px;row-gap:3px;color:#c9d1d9">';
+        html+='<span>'+mark(hit(tp1_p))+'</span><span class="num" style="color:#3fb950">+10%</span><span>$'+tp1_p.toFixed(2)+' → 卖 25% ('+tp1_n+'股)</span><span style="color:#8b949e">止损升保本</span>';
+        html+='<span>'+mark(hit(tp2_p))+'</span><span class="num" style="color:#3fb950">+20%</span><span>$'+tp2_p.toFixed(2)+' → 卖 25% ('+tp1_n+'股)</span><span style="color:#8b949e">止损升+5%</span>';
+        html+='<span>'+mark(hit(tp3_p))+'</span><span class="num" style="color:#3fb950">+30%</span><span>$'+tp3_p.toFixed(2)+' → 卖 33% ('+tp2_n+'股)</span><span style="color:#8b949e">余仓 SMA20 追踪</span>';
+        html+='</div>';
+        html+='<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #30363d;display:flex;justify-content:space-between;align-items:center"><strong style="color:#ff6b6b">🛑 止损阶梯</strong><span style="color:#8b949e;font-size:9.5px">硬规则</span></div>';
+        html+='<div style="display:grid;grid-template-columns:auto auto 1fr auto;column-gap:8px;row-gap:3px;margin-top:3px;color:#c9d1d9">';
+        const stopMark = lossHit ? '🔴' : '⏳';
+        html+='<span>'+stopMark+'</span><span class="num" style="color:#ff6b6b">-8%</span><span>$'+stop_p_full.toFixed(2)+' → <strong>一次性全清 '+totShares+' 股 (100%)</strong></span><span style="color:#8b949e">硬止损</span>';
+        const convVal = (c.r && c.r.conviction_score) || 100;
+        const convMark = convVal < 45 ? '🔴' : '⏳';
+        html+='<span>'+convMark+'</span><span class="num" style="color:#f39c12">Conv&lt;45</span><span>当前 '+convVal+' → <strong>卖一半 '+half_n+' 股 (50%)</strong></span><span style="color:#8b949e">基本面恶化</span>';
+        html+='</div></div>';
         html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10.5px;color:#8b949e;margin-bottom:6px">';
         html+='<div>买 $'+c.h.buy_price.toFixed(2)+' × '+c.h.shares+'</div>';
         html+='<div>现 $'+c.px.toFixed(2)+'</div>';
