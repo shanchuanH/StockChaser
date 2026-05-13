@@ -220,6 +220,17 @@ def run_pipeline(use_mock=False):
         except Exception as exc:
             return False, s.name + " error: " + str(exc)
 
+    # Run alert detector — non-fatal if it errors out
+    try:
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "alerts.py")],
+            capture_output=True, text=True, timeout=60,
+        )
+        if r.returncode != 0:
+            print("alerts.py warning: " + r.stderr[:200])
+    except Exception as exc:
+        print("alerts.py error: " + str(exc))
+
     # Best-effort: push priority change to Telegram. Never fail the pipeline.
     try:
         subprocess.run(
@@ -432,6 +443,45 @@ def api_conviction_history():
     if not fp.exists():
         return jsonify({})
     return Response(fp.read_text(encoding="utf-8"), mimetype="application/json")
+
+
+# ===== Pending alerts (persistent trigger events) =====
+@app.route("/api/alerts", methods=["GET"])
+def api_alerts():
+    """Return active (un-dismissed, un-snoozed) alerts."""
+    try:
+        from alerts import active_alerts
+        return jsonify({"alerts": active_alerts()})
+    except Exception as exc:
+        return jsonify({"error": str(exc), "alerts": []}), 500
+
+
+@app.route("/api/alerts/dismiss", methods=["POST"])
+def api_alerts_dismiss():
+    """Dismiss or snooze a specific alert.
+    body: {ticker, id, snooze_hours?}
+    """
+    body = request.get_json(force=True, silent=True) or {}
+    ticker = (body.get("ticker") or "").upper()
+    alert_id = body.get("id")
+    snooze_hours = body.get("snooze_hours")
+    try:
+        from alerts import dismiss
+        ok = dismiss(ticker, alert_id, snooze_hours)
+        return jsonify({"ok": bool(ok)})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/alerts/scan", methods=["POST"])
+def api_alerts_scan():
+    """Manually trigger alert detection (e.g. from dashboard button)."""
+    try:
+        from alerts import detect_and_persist, active_alerts
+        n_new = detect_and_persist()
+        return jsonify({"ok": True, "new": n_new, "active": active_alerts()})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/api/holdings/export", methods=["GET"])

@@ -81,6 +81,8 @@ tr.detail td{background:#0d1218;padding:14px 20px;border-bottom:2px solid var(--
 </header>
 <div id="mock-banner" class="mock-banner" style="display:none">⚠️ MOCK 数据。生产用 <code>python serve.py</code></div>
 <div id="crash-banner" style="display:none;background:linear-gradient(90deg,#d63031,#ff6b6b);color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:700;border-bottom:2px solid #ff4757"></div>
+<div id="stale-banner" style="display:none;background:#f39c12;color:#000;text-align:center;padding:6px;font-size:12px;font-weight:700"></div>
+<div id="pending-alerts" style="display:none;background:#1a0e10;border-bottom:2px solid #d63031;padding:10px 16px"></div>
 <div class="view-tabs">
   <button class="view-tab active" data-view="dashboard">📊 实时看板</button>
   <button class="view-tab" data-view="backtest">📈 策略回测</button>
@@ -198,10 +200,93 @@ async function loadData(){
       rb.style.background=data.regime_modifier>=1?"rgba(63,185,80,.2)":data.regime_modifier>=0.85?"rgba(241,196,15,.15)":"rgba(214,48,49,.2)";
     }
     updateCrashBanner();
+    updateStaleBanner();
+    loadPendingAlerts();
     updateCounts();render();
   }catch(e){
     document.getElementById("last-updated").textContent="连接失败，5s后重试…";
     _scheduleRetry();
+  }
+}
+
+// ===== Persistent pending alerts =====
+let _pendingAlerts = [];
+async function loadPendingAlerts(){
+  try{
+    const r = await fetch("/api/alerts");
+    const d = await r.json();
+    _pendingAlerts = d.alerts || [];
+    renderPendingAlerts();
+  }catch(e){ /* silent */ }
+}
+function renderPendingAlerts(){
+  const box = document.getElementById("pending-alerts");
+  if(!box) return;
+  if(!_pendingAlerts || _pendingAlerts.length === 0){
+    box.style.display = "none";
+    box.innerHTML = "";
+    return;
+  }
+  const typeMeta = {
+    flash_8:    {emoji:"🚨", color:"#d63031", label:"单日暴跌 ≤-8%"},
+    flash_5:    {emoji:"⚠️", color:"#f39c12", label:"单日跌 ≤-5%"},
+    stop_8:     {emoji:"🛑", color:"#d63031", label:"累计止损 -8%"},
+    conv_break: {emoji:"🔻", color:"#f39c12", label:"Conv 跌破 45"},
+    hwm_trail:  {emoji:"📉", color:"#f39c12", label:"高水位回撤 15%"},
+    time_stop:  {emoji:"⏰", color:"#8b949e", label:"4 周无进展"},
+  };
+  let html = '<div style="font-weight:700;color:#ff6b6b;margin-bottom:8px;font-size:13px">🔔 待操作信号 ('+_pendingAlerts.length+') — 这些是历史触发的事件，未操作前不会消失</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:8px">';
+  for(const a of _pendingAlerts){
+    const m = typeMeta[a.type] || {emoji:"❗", color:"#8b949e", label:a.type};
+    const t = new Date(a.triggered_at).toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+    html += '<div style="background:#21262d;border-left:4px solid '+m.color+';border-radius:5px;padding:8px 10px;font-size:11.5px;color:#c9d1d9">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">';
+    html += '<div><strong style="color:'+m.color+';font-size:13px">'+m.emoji+' '+a.ticker+' — '+m.label+'</strong>';
+    html += '<div style="color:#8b949e;font-size:10px;margin-top:1px">触发于 '+t+'  ·  '+a.trigger_metric+'</div></div>';
+    html += '<div style="text-align:right;color:#8b949e;font-size:10px">触发价 $'+(a.trigger_price||0).toFixed(2)+'</div></div>';
+    html += '<div style="background:'+m.color+'22;padding:6px 8px;border-radius:4px;margin-top:4px"><strong>→ '+a.action_label+'</strong>';
+    if(a.shares_to_sell > 0) html += '：卖 '+a.shares_to_sell+' 股，剩 '+a.shares_remaining+' 股';
+    html += '</div>';
+    html += '<div style="margin-top:6px;display:flex;gap:5px">';
+    html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',null)" style="flex:2;background:#3fb950;color:#000;border:none;padding:5px;border-radius:3px;font-size:11px;font-weight:600;cursor:pointer">✅ 已操作</button>';
+    html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',24)" style="flex:1;background:#444;color:#c9d1d9;border:none;padding:5px;border-radius:3px;font-size:11px;cursor:pointer">⏸ 24h</button>';
+    html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',168)" style="flex:1;background:#333;color:#8b949e;border:none;padding:5px;border-radius:3px;font-size:11px;cursor:pointer">⏸ 1w</button>';
+    html += '</div></div>';
+  }
+  html += '</div>';
+  box.innerHTML = html;
+  box.style.display = "block";
+}
+async function dismissAlert(ticker, id, snoozeHours){
+  try{
+    await fetch("/api/alerts/dismiss", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ticker, id, snooze_hours: snoozeHours})
+    });
+    await loadPendingAlerts();
+  }catch(e){ alert("操作失败: "+e); }
+}
+
+// ===== Stale-data warning =====
+function updateStaleBanner(){
+  if(!data) return;
+  const banner = document.getElementById("stale-banner");
+  if(!banner) return;
+  const ageMin = (Date.now() - new Date(data.generated_at).getTime()) / 60000;
+  // Market hours (US ET 09:30-16:00 Mon-Fri) — be strict; off-hours allow up to 90min
+  const now = new Date();
+  const et = new Date(now.toLocaleString("en-US", {timeZone:"America/New_York"}));
+  const isMarketHours = et.getDay()>=1 && et.getDay()<=5 &&
+                        ((et.getHours()===9 && et.getMinutes()>=30) ||
+                         (et.getHours()>9 && et.getHours()<16) ||
+                         (et.getHours()===16 && et.getMinutes()===0));
+  const limit = isMarketHours ? 15 : 90;
+  if(ageMin > limit){
+    banner.textContent = "⚠️ 数据已 "+ageMin.toFixed(0)+" 分钟未更新（限 "+limit+" 分钟）— 后台刷新可能挂了，点击右上角『刷新』";
+    banner.style.display = "block";
+  } else {
+    banner.style.display = "none";
   }
 }
 
