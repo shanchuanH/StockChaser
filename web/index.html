@@ -228,12 +228,13 @@ function renderPendingAlerts(){
     return;
   }
   const typeMeta = {
-    flash_8:    {emoji:"🚨", color:"#d63031", label:"单日暴跌 ≤-8%"},
-    flash_5:    {emoji:"⚠️", color:"#f39c12", label:"单日跌 ≤-5%"},
+    flash_8:    {emoji:"🚨", color:"#d63031", label:"单日暴跌 ≤-8% (黑天鹅)"},
     stop_8:     {emoji:"🛑", color:"#d63031", label:"累计止损 -8%"},
     conv_break: {emoji:"🔻", color:"#f39c12", label:"Conv 跌破 45"},
-    hwm_trail:  {emoji:"📉", color:"#f39c12", label:"高水位回撤 15%"},
-    time_stop:  {emoji:"⏰", color:"#8b949e", label:"4 周无进展"},
+    // Legacy types kept for backwards compat with old pending_alerts.json entries.
+    flash_5:    {emoji:"⚠️", color:"#8b949e", label:"(已弃用) 单日跌 ≤-5%"},
+    hwm_trail:  {emoji:"📉", color:"#8b949e", label:"(已弃用) 高水位回撤"},
+    time_stop:  {emoji:"⏰", color:"#8b949e", label:"(已弃用) 时间止损"},
   };
   let html = '<div style="font-weight:700;color:#ff6b6b;margin-bottom:8px;font-size:13px">🔔 待操作信号 ('+_pendingAlerts.length+') — 这些是历史触发的事件，未操作前不会消失</div>';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:8px">';
@@ -794,18 +795,14 @@ function renderPortfolioView(){
       const pb=r.playbook;
       // Use user's actual entry-based stop (-8% from buy price)
       const personal_stop = h.buy_price * 0.92;
-      // NEW: single-day flash-crash protection — overrides everything below
+      // Single-day flash-crash protection (portfolio.json: 单日跌幅 > 8% 黑天鹅)
+      // V2 增加的 -5% 档已被 4 年回测证伪 (156 次触发, 牛市损失 145pp), 已删除
       const daily_pct = r.daily_return_pct || 0;
       if(daily_pct <= -8){
         verb="SELL"; verb_color="#d63031";
         const cutN = Math.floor(h.shares * 0.7);
         action_text="🚨 减至 30%：卖 "+cutN+" 股 (70%)";
         reason="单日 "+daily_pct.toFixed(2)+"% 黑天鹅，剩 "+(h.shares-cutN)+" 股观察";
-      }else if(daily_pct <= -5){
-        verb="SELL"; verb_color="#f39c12";
-        const cutN = Math.floor(h.shares * 0.5);
-        action_text="⚠️ 减半：卖 "+cutN+" 股 (50%)";
-        reason="单日 "+daily_pct.toFixed(2)+"% 异常，先减半防进一步下杀";
       }else if(px <= personal_stop){
         verb="SELL"; verb_color="#d63031";
         action_text="🛑 全清 "+h.shares+" 股 (100%)";
@@ -978,8 +975,8 @@ function renderPortfolioView(){
         html+='<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #30363d;display:flex;justify-content:space-between;align-items:center"><strong style="color:#ff6b6b">🛑 止损阶梯</strong><span style="color:#8b949e;font-size:9.5px">硬规则</span></div>';
         html+='<div style="display:grid;grid-template-columns:auto auto 1fr auto;column-gap:8px;row-gap:3px;margin-top:3px;color:#c9d1d9">';
         const daily_v = (c.r && c.r.daily_return_pct) || 0;
-        const flashMark = daily_v <= -8 ? '🔴' : daily_v <= -5 ? '🟠' : '⏳';
-        html+='<span>'+flashMark+'</span><span class="num" style="color:#ff6b6b">单日≤-5%</span><span>今日 '+daily_v.toFixed(2)+'% → <strong>减半</strong>；≤-8% → <strong>减至 30%</strong></span><span style="color:#8b949e">黑天鹅</span>';
+        const flashMark = daily_v <= -8 ? '🔴' : '⏳';
+        html+='<span>'+flashMark+'</span><span class="num" style="color:#ff6b6b">单日≤-8%</span><span>今日 '+daily_v.toFixed(2)+'% → <strong>减至 30%（卖 70%）</strong></span><span style="color:#8b949e">黑天鹅</span>';
         const stopMark = lossHit ? '🔴' : '⏳';
         html+='<span>'+stopMark+'</span><span class="num" style="color:#ff6b6b">-8%</span><span>$'+stop_p_full.toFixed(2)+' → <strong>一次性全清 '+totShares+' 股 (100%)</strong></span><span style="color:#8b949e">硬止损</span>';
         const convVal = (c.r && c.r.conviction_score) || 100;

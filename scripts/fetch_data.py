@@ -1,15 +1,20 @@
-"""Fetch 24-month daily price history for the AI-chain universe via yfinance.
+"""Fetch daily price history for the AI-chain universe via yfinance.
 
 Now also computes ATR(20) and 20-day average volume.
 Stores both summary stats AND the full price history (compact form), so the
 backtest engine can replay history without re-fetching.
+
+CLI:
+  python3 scripts/fetch_data.py              → default 3 years
+  python3 scripts/fetch_data.py --years 5    → 5 years (useful for backtest)
+  python3 scripts/fetch_data.py --days 1825  → exact day count
 
 Outputs:
   data/prices.json         - latest summary stats per ticker
   data/history.parquet     - full daily OHLCV for backtest
 """
 from __future__ import annotations
-import json, sys
+import argparse, json, sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -23,7 +28,7 @@ def true_range(high, low, prev_close):
     return max(high - low, abs(high - prev_close), abs(low - prev_close))
 
 
-def fetch():
+def fetch(days_back: int = 1100):
     try:
         import yfinance as yf
         import pandas as pd
@@ -49,8 +54,8 @@ def fetch():
     print(f"Fetching {len(tickers)} tickers ({len(extra_tickers)} extras for ETF tracking)…")
 
     end = datetime.now(timezone.utc)
-    # 36 months — covers 2022 bear market for stress-testing strategies
-    start = end - timedelta(days=1100)
+    start = end - timedelta(days=days_back)
+    print(f"Date range: {start.date()} → {end.date()}  ({days_back} days ≈ {days_back/365:.1f} years)")
     df = yf.download(
         tickers,
         start=start.strftime("%Y-%m-%d"),
@@ -197,4 +202,16 @@ def fetch():
 
 
 if __name__ == "__main__":
-    fetch()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--years", type=float, default=None,
+                    help="Years of history to fetch (default 3.0)")
+    ap.add_argument("--days", type=int, default=None,
+                    help="Override years and use exact day count")
+    args = ap.parse_args()
+    if args.days is not None:
+        n_days = args.days
+    elif args.years is not None:
+        n_days = int(args.years * 365)
+    else:
+        n_days = 1100
+    fetch(days_back=n_days)

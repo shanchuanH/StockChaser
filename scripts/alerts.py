@@ -154,51 +154,27 @@ def detect_and_persist():
             pending.setdefault(t, []).append(alert)
             existing_ids.add(aid)
 
-        # ----- Triggers (priority order: most severe first) -----
+        # ----- Triggers (V1 — backtested winning set, May 2022→May 2026: +189% CAGR 30%) -----
+        # Removed by 4-yr backtest证伪:
+        #   flash_5  (单日 -5%)    — 4 年触发 156 次, 牛市损失 145pp 远超熊市保护 0pp
+        #   hwm_trail (峰值 -15%) — 同样原因
+        #   time_stop  (4 周无 +1R) — V2 全套加起来熊市保护 ≈ 0
+        # 保留的是 portfolio.json 原文 + 实测有效的:
         if category not in ("etf", "external"):
-            # 1. Single-day flash crash ≤ -8% → reduce to 30%
+            # 1. Single-day flash crash ≤ -8% (黑天鹅) → reduce to 30%
             if daily <= -8:
                 add_alert("flash_8", f"单日 {daily:.2f}%",
                           f"减至 30%（卖 70%）", int(shares * 0.7))
-            # 2. Single-day -5 to -8% → reduce 50%
-            elif daily <= -5:
-                add_alert("flash_5", f"单日 {daily:.2f}%",
-                          f"减半（卖 50%）", int(shares * 0.5))
 
-            # 3. Cumulative -8% hard stop → close all
+            # 2. Cumulative -8% hard stop → close all
             if ret_pct <= -8:
                 add_alert("stop_8", f"累计 {ret_pct:.2f}% (买入 ${buy:.2f})",
                           "全清", shares)
 
-            # 4. Conviction breakdown
+            # 3. Conviction breakdown
             if conv < 45:
                 add_alert("conv_break", f"Conv {conv} < 45",
                           "卖一半（基本面恶化）", int(shares / 2))
-
-            # 5. Time stop — held >= 28 days AND ret < 12% AND Conv < 70.
-            # We skip the alert if Conv is still strong: the engine still
-            # likes the stock; "timing wrong" ≠ "thesis wrong". Skip ALSO
-            # when ret already ≥ 8% — close enough to +1R.
-            buy_d = h.get("buy_date")
-            if buy_d and conv < 70:
-                try:
-                    held_days = (datetime.now(timezone.utc).date()
-                                 - datetime.strptime(buy_d, "%Y-%m-%d").date()).days
-                    if held_days >= 28 and ret_pct < 8:
-                        add_alert("time_stop", f"持有 {held_days} 天仅 {ret_pct:+.1f}%, Conv {conv}",
-                                  "卖一半（4 周未到 +1R 且引擎不再强烈推荐）",
-                                  int(shares / 2))
-                except (TypeError, ValueError):
-                    pass
-
-        # 6. High-water-mark trailing stop (-15% from peak) — applies to ALL incl ETF
-        hwm = hwm_map.get(t)
-        if hwm and hwm > buy * 1.10:  # only meaningful if it ever ran > +10%
-            trail_line = hwm * 0.85
-            if px <= trail_line:
-                drop_from_peak = (px / hwm - 1) * 100
-                add_alert("hwm_trail", f"距 4w 峰 ${hwm:.2f} {drop_from_peak:.1f}%",
-                          "卖一半（回撤 15% 自峰值）", int(shares / 2))
 
     # Write back
     PENDING.write_text(json.dumps(pending, ensure_ascii=False, indent=2),
@@ -252,13 +228,6 @@ def active_alerts():
     # Sort by severity then recency
     sev = {"flash_8": 0, "stop_8": 1, "flash_5": 2, "conv_break": 3,
            "hwm_trail": 4, "time_stop": 5}
-    out.sort(key=lambda a: (sev.get(a.get("type"), 99), a.get("triggered_at", "")))
-    return out
-
-
-if __name__ == "__main__":
-    n = detect_and_persist()
-    print(f"\n{n} new alerts; {len(active_alerts())} active total")
     out.sort(key=lambda a: (sev.get(a.get("type"), 99), a.get("triggered_at", "")))
     return out
 
