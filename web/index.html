@@ -740,6 +740,63 @@ function promptBuy(ticker, price){
   alert("✓ 已记录买入 "+ticker+" "+shares+" 股 @ $"+px);
 }
 
+async function promptAddBatch(ticker, currentPrice){
+  // Add a follow-up batch to an existing position (recomputes weighted avg server-side).
+  const pf = await pfLoad();
+  const h = pf[ticker];
+  if(!h){ alert('未找到 '+ticker+' 持仓'); return; }
+  const cp = typeof currentPrice === 'number' ? currentPrice : parseFloat(currentPrice) || h.buy_price;
+  const sharesStr = prompt(
+    "➕ 加仓 "+ticker+"\n现价: $"+cp.toFixed(2)+"\n当前持仓: "+h.shares+" 股 @ 均价 $"+h.buy_price.toFixed(2)+
+    "\n\n本次加仓多少股?",
+    "5"
+  );
+  if(!sharesStr) return;
+  const shares = parseFloat(sharesStr);
+  if(isNaN(shares) || shares <= 0){ alert('股数无效'); return; }
+  const pxStr = prompt("成交价 ($)?", cp.toFixed(2));
+  if(!pxStr) return;
+  const px = parseFloat(pxStr);
+  if(isNaN(px) || px <= 0){ alert('价格无效'); return; }
+  try{
+    await pfAddBatch(ticker, px, shares);
+    const newH = (await pfLoad())[ticker];
+    alert("✓ 已加仓 "+shares+" 股 @ $"+px.toFixed(2)+
+          "\n新持仓: "+newH.shares+" 股 @ 均价 $"+newH.buy_price.toFixed(2));
+    renderPortfolioView();
+    render();
+  }catch(e){ alert("加仓失败: "+e.message); }
+}
+
+async function promptReduce(ticker){
+  // Reduce by N shares (records partial sale, updates total via update_shares).
+  const pf = await pfLoad();
+  const h = pf[ticker];
+  if(!h){ alert('未找到 '+ticker+' 持仓'); return; }
+  const sharesStr = prompt(
+    "➖ 减仓 "+ticker+"\n当前持仓: "+h.shares+" 股 @ 均价 $"+h.buy_price.toFixed(2)+
+    "\n\n卖出多少股? (输入 "+h.shares+" 清仓)",
+    Math.floor(h.shares/2).toString()
+  );
+  if(!sharesStr) return;
+  const sell = parseFloat(sharesStr);
+  if(isNaN(sell) || sell <= 0){ alert('股数无效'); return; }
+  if(sell > h.shares){ alert('卖出股数不能超过持仓 '+h.shares); return; }
+  const remaining = +(h.shares - sell).toFixed(6);
+  const verb = remaining <= 0 ? "清仓" : ("减至 "+remaining+" 股");
+  if(!confirm("确认 "+verb+" "+ticker+"? (卖 "+sell+" 股)")) return;
+  try{
+    await pfUpdateShares(ticker, remaining);
+    if(remaining <= 0){
+      alert("✓ 已清仓 "+ticker);
+    } else {
+      alert("✓ 已减仓 "+sell+" 股, 剩 "+remaining+" 股");
+    }
+    renderPortfolioView();
+    render();
+  }catch(e){ alert("减仓失败: "+e.message); }
+}
+
 
 function determineNextAction(held, r){
   if(!r||r.latest_price==null)return {action:"等待数据",color:"#8b949e",detail:"-"};
