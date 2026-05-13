@@ -128,6 +128,8 @@ def detect_and_persist():
         if buy <= 0 or shares <= 0:
             continue
         category = h.get("category")  # ETF/external — only trail-stop applies
+        # NEW: strategy-aware. "anti_martingale" = sell triggers; "martingale" = dip-buy only.
+        strategy = h.get("strategy", "anti_martingale")
         ret_pct = (px / buy - 1) * 100
 
         def add_alert(typ, metric, action_label, sell_n, snooze_hr=None):
@@ -160,21 +162,34 @@ def detect_and_persist():
         #   hwm_trail (峰值 -15%) — 同样原因
         #   time_stop  (4 周无 +1R) — V2 全套加起来熊市保护 ≈ 0
         # 保留的是 portfolio.json 原文 + 实测有效的:
-        if category not in ("etf", "external"):
+        if strategy == "anti_martingale" and category not in ("etf", "external"):
+            # ===== Anti-martingale: hard stops + Conv-break =====
             # 1. Single-day flash crash ≤ -8% (黑天鹅) → reduce to 30%
             if daily <= -8:
                 add_alert("flash_8", f"单日 {daily:.2f}%",
                           f"减至 30%（卖 70%）", int(shares * 0.7))
-
             # 2. Cumulative -8% hard stop → close all
             if ret_pct <= -8:
                 add_alert("stop_8", f"累计 {ret_pct:.2f}% (买入 ${buy:.2f})",
                           "全清", shares)
-
             # 3. Conviction breakdown
             if conv < 45:
                 add_alert("conv_break", f"Conv {conv} < 45",
                           "卖一半（基本面恶化）", int(shares / 2))
+
+        elif strategy == "martingale":
+            # ===== Martingale: NO sell triggers, dip-buy ladder instead =====
+            # Tier 1 dip: -5% from buy_price → small add (30% of initial position)
+            # Tier 2 dip: -10% → medium (50%)
+            # Tier 3 dip: -15% → large (100% initial = double down)
+            initial_shares = h.get("peak_shares", shares) or shares
+            for dip in (h.get("dip_ladder") or []):
+                trigger = dip.get("trigger_pct", 0)
+                if ret_pct <= trigger * 100:
+                    name = dip.get("name", "dip")
+                    buy_n = max(1, int(initial_shares * dip.get("buy_pct_of_initial", 0.3)))
+                    add_alert(name, f"累计 {ret_pct:.2f}% (跌至 {trigger*100:.0f}% 加仓档)",
+                              f"💧 加仓 {buy_n} 股 (马丁档 {name})", -buy_n)
 
     # Write back
     PENDING.write_text(json.dumps(pending, ensure_ascii=False, indent=2),
@@ -225,9 +240,9 @@ def active_alerts():
                 except ValueError:
                     pass
             out.append(a)
-    # Sort by severity then recency
     sev = {"flash_8": 0, "stop_8": 1, "flash_5": 2, "conv_break": 3,
-           "hwm_trail": 4, "time_stop": 5}
+           "dip_3": 4, "dip_2": 5, "dip_1": 6,
+           "hwm_trail": 7, "time_stop": 8}
     out.sort(key=lambda a: (sev.get(a.get("type"), 99), a.get("triggered_at", "")))
     return out
 

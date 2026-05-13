@@ -11,7 +11,41 @@
         "date": "2025-08-01"
       }
     ],
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "anti_martingale",
+    "stop_loss_pct": -0.08,
+    "profit_ladder": [
+      {
+        "trigger_pct": 0.1,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_1"
+      },
+      {
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_2"
+      },
+      {
+        "trigger_pct": 0.3,
+        "sell_pct_of_peak": 0.33,
+        "name": "tier_3"
+      }
+    ],
+    "entry_ladder": [
+      {
+        "trigger": "initial",
+        "name": "step_1"
+      },
+      {
+        "trigger_pct": 0.03,
+        "name": "step_2"
+      },
+      {
+        "trigger_pct": 0.06,
+        "name": "step_3"
+      }
+    ],
+    "dip_ladder": null
   },
   "AMZN": {
     "ticker": "AMZN",
@@ -25,7 +59,28 @@
         "date": "2024-08-01"
       }
     ],
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "martingale",
+    "stop_loss_pct": null,
+    "profit_ladder": null,
+    "entry_ladder": null,
+    "dip_ladder": [
+      {
+        "trigger_pct": -0.05,
+        "buy_pct_of_initial": 0.3,
+        "name": "dip_1"
+      },
+      {
+        "trigger_pct": -0.1,
+        "buy_pct_of_initial": 0.5,
+        "name": "dip_2"
+      },
+      {
+        "trigger_pct": -0.15,
+        "buy_pct_of_initial": 1.0,
+        "name": "dip_3"
+      }
+    ]
   },
   "ARM": {
     "ticker": "ARM",
@@ -39,7 +94,41 @@
         "date": "2025-10-01"
       }
     ],
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "anti_martingale",
+    "stop_loss_pct": -0.08,
+    "profit_ladder": [
+      {
+        "trigger_pct": 0.1,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_1"
+      },
+      {
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_2"
+      },
+      {
+        "trigger_pct": 0.3,
+        "sell_pct_of_peak": 0.33,
+        "name": "tier_3"
+      }
+    ],
+    "entry_ladder": [
+      {
+        "trigger": "initial",
+        "name": "step_1"
+      },
+      {
+        "trigger_pct": 0.03,
+        "name": "step_2"
+      },
+      {
+        "trigger_pct": 0.06,
+        "name": "step_3"
+      }
+    ],
+    "dip_ladder": null
   },
   "GOOGL": {
     "ticker": "GOOGL",
@@ -53,7 +142,28 @@
         "date": "2025-04-01"
       }
     ],
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "martingale",
+    "stop_loss_pct": null,
+    "profit_ladder": null,
+    "entry_ladder": null,
+    "dip_ladder": [
+      {
+        "trigger_pct": -0.05,
+        "buy_pct_of_initial": 0.3,
+        "name": "dip_1"
+      },
+      {
+        "trigger_pct": -0.1,
+        "buy_pct_of_initial": 0.5,
+        "name": "dip_2"
+      },
+      {
+        "trigger_pct": -0.15,
+        "buy_pct_of_initial": 1.0,
+        "name": "dip_3"
+      }
+    ]
   },
   "HIMX": {
     "ticker": "HIMX",
@@ -67,7 +177,41 @@
         "date": "2025-09-01"
       }
     ],
-    "_imported": "from Fidelity 2026-05-11 - Taiwan display IC, promoted to AI universe"
+    "_imported": "from Fidelity 2026-05-11 - Taiwan display IC, promoted to AI universe",
+    "strategy": "anti_martingale",
+    "stop_loss_pct": -0.08,
+    "profit_ladder": [
+      {
+        "trigger_pct": 0.1,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_1"
+      },
+      {
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_2"
+      },
+      {
+        "trigger_pct": 0.3,
+        "sell_pct_of_peak": 0.33,
+        "name": "tier_3"
+      }
+    ],
+    "entry_ladder": [
+      {
+        "trigger": "initial",
+        "name": "step_1"
+      },
+      {
+        "trigger_pct": 0.03,
+        "name": "step_2"
+      },
+      {
+        "trigger_pct": 0.06,
+        "name": "step_3"
+      }
+    ],
+    "dip_ladder": null
   },
   "LSCC": {
     "ticker": "LSCC",
@@ -81,7 +225,41 @@
         "date": "2025-11-01"
       }
     ],
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "anti_martingale",
+    "stop_loss_pct": -0.08,
+    "profit_ladder": [
+      {
+        "trigger_pct": 0.1,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_1"
+      },
+      {
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_2"
+      },
+      {
+        "trigger_pct": 0.3,
+        "sell_pct_of_peak": 0.33,
+        "name": "tier_3"
+      }
+    ],
+    "entry_ladder": [
+      {
+        "trigger": "initial",
+        "name": "step_1"
+      },
+      {
+        "trigger_pct": 0.03,
+        "name": "step_2"
+      },
+      {
+        "trigger_pct": 0.06,
+        "name": "step_3"
+      }
+    ],
+    "dip_ladder": null
   },
   "MSFT": {
     "ticker": "MSFT",
@@ -95,7 +273,28 @@
         "date": "2025-06-01"
       }
     ],
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "martingale",
+    "stop_loss_pct": null,
+    "profit_ladder": null,
+    "entry_ladder": null,
+    "dip_ladder": [
+      {
+        "trigger_pct": -0.05,
+        "buy_pct_of_initial": 0.3,
+        "name": "dip_1"
+      },
+      {
+        "trigger_pct": -0.1,
+        "buy_pct_of_initial": 0.5,
+        "name": "dip_2"
+      },
+      {
+        "trigger_pct": -0.15,
+        "buy_pct_of_initial": 1.0,
+        "name": "dip_3"
+      }
+    ]
   },
   "QCOM": {
     "ticker": "QCOM",
@@ -115,7 +314,41 @@
         "_note": "post-13% dip add"
       }
     ],
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "anti_martingale",
+    "stop_loss_pct": -0.08,
+    "profit_ladder": [
+      {
+        "trigger_pct": 0.1,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_1"
+      },
+      {
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_2"
+      },
+      {
+        "trigger_pct": 0.3,
+        "sell_pct_of_peak": 0.33,
+        "name": "tier_3"
+      }
+    ],
+    "entry_ladder": [
+      {
+        "trigger": "initial",
+        "name": "step_1"
+      },
+      {
+        "trigger_pct": 0.03,
+        "name": "step_2"
+      },
+      {
+        "trigger_pct": 0.06,
+        "name": "step_3"
+      }
+    ],
+    "dip_ladder": null
   },
   "VRT": {
     "ticker": "VRT",
@@ -129,7 +362,41 @@
         "date": "2025-09-01"
       }
     ],
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "anti_martingale",
+    "stop_loss_pct": -0.08,
+    "profit_ladder": [
+      {
+        "trigger_pct": 0.1,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_1"
+      },
+      {
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.25,
+        "name": "tier_2"
+      },
+      {
+        "trigger_pct": 0.3,
+        "sell_pct_of_peak": 0.33,
+        "name": "tier_3"
+      }
+    ],
+    "entry_ladder": [
+      {
+        "trigger": "initial",
+        "name": "step_1"
+      },
+      {
+        "trigger_pct": 0.03,
+        "name": "step_2"
+      },
+      {
+        "trigger_pct": 0.06,
+        "name": "step_3"
+      }
+    ],
+    "dip_ladder": null
   },
   "DRAM": {
     "ticker": "DRAM",
@@ -158,7 +425,28 @@
         "date": "2026-05-12"
       }
     ],
-    "_note": "AI 链 内存主题 (替代韩股 Hynix/Samsung 不可买)"
+    "_note": "AI 链 内存主题 (替代韩股 Hynix/Samsung 不可买)",
+    "strategy": "martingale",
+    "stop_loss_pct": null,
+    "profit_ladder": null,
+    "entry_ladder": null,
+    "dip_ladder": [
+      {
+        "trigger_pct": -0.05,
+        "buy_pct_of_initial": 0.3,
+        "name": "dip_1"
+      },
+      {
+        "trigger_pct": -0.1,
+        "buy_pct_of_initial": 0.5,
+        "name": "dip_2"
+      },
+      {
+        "trigger_pct": -0.15,
+        "buy_pct_of_initial": 1.0,
+        "name": "dip_3"
+      }
+    ]
   },
   "QQQM": {
     "ticker": "QQQM",
@@ -174,7 +462,28 @@
     ],
     "category": "etf",
     "name": "Invesco Nasdaq 100 ETF",
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "martingale",
+    "stop_loss_pct": null,
+    "profit_ladder": null,
+    "entry_ladder": null,
+    "dip_ladder": [
+      {
+        "trigger_pct": -0.05,
+        "buy_pct_of_initial": 0.3,
+        "name": "dip_1"
+      },
+      {
+        "trigger_pct": -0.1,
+        "buy_pct_of_initial": 0.5,
+        "name": "dip_2"
+      },
+      {
+        "trigger_pct": -0.15,
+        "buy_pct_of_initial": 1.0,
+        "name": "dip_3"
+      }
+    ]
   },
   "SCHD": {
     "ticker": "SCHD",
@@ -190,7 +499,28 @@
     ],
     "category": "etf",
     "name": "Schwab Dividend ETF",
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "martingale",
+    "stop_loss_pct": null,
+    "profit_ladder": null,
+    "entry_ladder": null,
+    "dip_ladder": [
+      {
+        "trigger_pct": -0.05,
+        "buy_pct_of_initial": 0.3,
+        "name": "dip_1"
+      },
+      {
+        "trigger_pct": -0.1,
+        "buy_pct_of_initial": 0.5,
+        "name": "dip_2"
+      },
+      {
+        "trigger_pct": -0.15,
+        "buy_pct_of_initial": 1.0,
+        "name": "dip_3"
+      }
+    ]
   },
   "VGT": {
     "ticker": "VGT",
@@ -206,7 +536,28 @@
     ],
     "category": "etf",
     "name": "Vanguard Tech ETF",
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "martingale",
+    "stop_loss_pct": null,
+    "profit_ladder": null,
+    "entry_ladder": null,
+    "dip_ladder": [
+      {
+        "trigger_pct": -0.05,
+        "buy_pct_of_initial": 0.3,
+        "name": "dip_1"
+      },
+      {
+        "trigger_pct": -0.1,
+        "buy_pct_of_initial": 0.5,
+        "name": "dip_2"
+      },
+      {
+        "trigger_pct": -0.15,
+        "buy_pct_of_initial": 1.0,
+        "name": "dip_3"
+      }
+    ]
   },
   "VOO": {
     "ticker": "VOO",
@@ -222,6 +573,27 @@
     ],
     "category": "etf",
     "name": "Vanguard SP500 ETF",
-    "_imported": "from Fidelity 2026-05-11"
+    "_imported": "from Fidelity 2026-05-11",
+    "strategy": "martingale",
+    "stop_loss_pct": null,
+    "profit_ladder": null,
+    "entry_ladder": null,
+    "dip_ladder": [
+      {
+        "trigger_pct": -0.05,
+        "buy_pct_of_initial": 0.3,
+        "name": "dip_1"
+      },
+      {
+        "trigger_pct": -0.1,
+        "buy_pct_of_initial": 0.5,
+        "name": "dip_2"
+      },
+      {
+        "trigger_pct": -0.15,
+        "buy_pct_of_initial": 1.0,
+        "name": "dip_3"
+      }
+    ]
   }
 }
