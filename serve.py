@@ -370,6 +370,13 @@ def api_holdings_upsert():
     shares = float(body.get("shares") or 0)
     buy_price = float(body.get("buy_price") or 0)
     buy_date = body.get("buy_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Optional entry step from body — which strategic batch this purchase
+    # satisfies (step_1 / step_2 / step_3 / dca / re_entry / manual)
+    step = (body.get("step") or "").lower() or None
+    VALID_STEPS = {"step_1", "step_2", "step_3", "dca", "re_entry", "manual"}
+    if step and step not in VALID_STEPS:
+        step = "manual"
+
     with _holdings_lock:
         pf = _load_holdings()
         if ticker in pf:
@@ -379,31 +386,116 @@ def api_holdings_upsert():
             new_avg = (old["buy_price"] * old["shares"] + buy_price * shares) / total if total > 0 else buy_price
             old["shares"] = total
             old["buy_price"] = round(new_avg, 2)
-            old.setdefault("batches", []).append({"price": buy_price, "shares": shares, "date": buy_date})
+            # Default to dca if user didn't specify (most adds are dollar-cost avg, not ladder)
+            effective_step = step or "dca"
+            old.setdefault("batches", []).append({
+                "price": buy_price, "shares": shares, "date": buy_date, "step": effective_step,
+            })
+            # Track peak shares (max ever held) for tier-aware profit taking.
+            old["peak_shares"] = max(old.get("peak_shares", 0) or 0, total)
+            # Track explicit entry steps (parallel to tiers_executed)
+            if effective_step in ("step_1", "step_2", "step_3"):
+                ese = old.setdefault("entry_steps_executed", [])
+                # de-dup by step id; if already in list, just record event in actions
+                if effective_step not in [e.get("step") for e in ese if isinstance(e, dict)] \
+                        and effective_step not in ese:
+                    ese.append({
+                        "step": effective_step, "date": buy_date,
+                        "shares": shares, "price": buy_price,
+                    })
+            # Append to actions log for full audit trail
+            old.setdefault("actions", []).append({
+                "t": "add", "step": effective_step, "shares": shares, "price": buy_price,
+                "date": buy_date, "after_shares": total,
+            })
         else:
+            # First purchase = step_1 unless explicitly told otherwise
+            first_step = step if step in ("step_1", "manual", "re_entry") else "step_1"
             pf[ticker] = {
                 "ticker": ticker, "shares": shares, "buy_price": buy_price, "buy_date": buy_date,
-                "batches": [{"price": buy_price, "shares": shares, "date": buy_date}],
+                "batches": [{"price": buy_price, "shares": shares, "date": buy_date, "step": first_step}],
+                "peak_shares": shares,
+                "entry_steps_executed": (
+                    [{"step": "step_1", "date": buy_date, "shares": shares, "price": buy_price}]
+                    if first_step == "step_1" else []
+                ),
+                "step_1_price": buy_price,  # anchor for step_2/3 thresholds (don't drift with playbook regens)
+                "actions": [{
+                    "t": "buy", "step": first_step, "shares": shares, "price": buy_price,
+                    "date": buy_date, "after_shares": shares,
+                }],
             }
         _save_holdings(pf)
         return jsonify({"ok": True, "holding": pf[ticker]})
 
 
+VALID_TIERS = {"tier_1", "tier_2", "tier_3", "stop_loss",
+               "conv_break", "flash_8", "manual"}
+
+
 @app.route("/api/holdings/update_shares", methods=["POST"])
 def api_holdings_update_shares():
+    """Reduce (or fully close) a holding.
+
+    Body:
+      ticker      str    required
+      shares      float  required — NEW total shares (set to 0 → close out)
+      reason      str    optional — "tier_1" / "tier_2" / "tier_3" /
+                                    "stop_loss" / "conv_break" / "flash_8" / "manual"
+      price       float  optional — sale price (for actions log)
+
+    If reason is in tier_1..tier_3, append to tiers_executed[] for tier-aware
+    UI. Always append to actions[] for audit log.
+    """
     body = request.get_json(force=True, silent=True) or {}
     ticker = (body.get("ticker") or "").upper()
-    shares = float(body.get("shares") or 0)
+    new_shares = float(body.get("shares") or 0)
+    reason = body.get("reason") or "manual"
+    if reason not in VALID_TIERS:
+        reason = "manual"
+    price = body.get("price")
+    try:
+        price = float(price) if price is not None else None
+    except (TypeError, ValueError):
+        price = None
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
     with _holdings_lock:
         pf = _load_holdings()
         if ticker not in pf:
             return jsonify({"error": "not held"}), 404
-        if shares <= 0:
+        h = pf[ticker]
+        old_shares = float(h.get("shares") or 0)
+        shares_sold = max(0.0, old_shares - new_shares)
+
+        # Append to actions log
+        h.setdefault("actions", []).append({
+            "t": "close" if new_shares <= 0 else "reduce",
+            "shares": shares_sold,
+            "price": price,
+            "reason": reason,
+            "date": today,
+            "before_shares": old_shares,
+            "after_shares": new_shares,
+        })
+
+        # Mark tier executed (if applicable)
+        if reason in ("tier_1", "tier_2", "tier_3"):
+            te = h.setdefault("tiers_executed", [])
+            if reason not in te:
+                te.append(reason)
+
+        if new_shares <= 0:
             del pf[ticker]
         else:
-            pf[ticker]["shares"] = shares
+            h["shares"] = new_shares
         _save_holdings(pf)
-        return jsonify({"ok": True})
+        return jsonify({
+            "ok": True,
+            "shares_sold": shares_sold,
+            "reason": reason,
+            "remaining": new_shares,
+        })
 
 
 @app.route("/api/portfolio_config", methods=["GET", "POST"])

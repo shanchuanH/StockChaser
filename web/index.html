@@ -740,61 +740,163 @@ function promptBuy(ticker, price){
   alert("✓ 已记录买入 "+ticker+" "+shares+" 股 @ $"+px);
 }
 
+// Returns the next entry step the user should pick, given current price.
+// Uses STEP_1_PRICE as anchor (doesn't drift with engine reruns).
+function suggestEntryStep(h, currentPrice){
+  const executed = (h.entry_steps_executed || []).map(e => (typeof e === 'string') ? e : e.step);
+  const step1Price = h.step_1_price || (h.batches && h.batches[0] && h.batches[0].price) || h.buy_price;
+  if(!executed.includes("step_1")){
+    return {step: "step_1", anchor: null, label: "step_1 (首批/initial)"};
+  }
+  if(!executed.includes("step_2")){
+    const thresh = step1Price * 1.03;
+    const hit = currentPrice >= thresh;
+    return {step: "step_2", anchor: thresh, hit,
+            label: "step_2 (涨 +3% 触发, 锚 $"+thresh.toFixed(2)+")"};
+  }
+  if(!executed.includes("step_3")){
+    const thresh = step1Price * 1.06;  // simplified: 4W high check is engine-side
+    const hit = currentPrice >= thresh;
+    return {step: "step_3", anchor: thresh, hit,
+            label: "step_3 (+6% 或 突破 4W 高, 锚 $"+thresh.toFixed(2)+")"};
+  }
+  return {step: "dca", anchor: null, label: "dca (ladder 已满, 后续算 dollar-cost avg)"};
+}
+
 async function promptAddBatch(ticker, currentPrice){
-  // Add a follow-up batch to an existing position (recomputes weighted avg server-side).
+  // Add a follow-up batch to an existing position; capture which strategic
+  // step this batch satisfies for tier-aware verb logic.
   const pf = await pfLoad();
   const h = pf[ticker];
   if(!h){ alert('未找到 '+ticker+' 持仓'); return; }
   const cp = typeof currentPrice === 'number' ? currentPrice : parseFloat(currentPrice) || h.buy_price;
-  const sharesStr = prompt(
-    "➕ 加仓 "+ticker+"\n现价: $"+cp.toFixed(2)+"\n当前持仓: "+h.shares+" 股 @ 均价 $"+h.buy_price.toFixed(2)+
-    "\n\n本次加仓多少股?",
-    "5"
+  const suggest = suggestEntryStep(h, cp);
+  const executed = (h.entry_steps_executed || []).map(e => (typeof e === 'string') ? e : e.step);
+
+  const stepOptions = [
+    "step_1 (首批 — 仅用于重新建仓)",
+    "step_2 (+3% 加仓档, 锚 $"+((h.step_1_price||h.buy_price)*1.03).toFixed(2)+")",
+    "step_3 (+6%/突破 4W 高, 锚 $"+((h.step_1_price||h.buy_price)*1.06).toFixed(2)+")",
+    "dca   (dollar-cost averaging, 不计入 ladder)",
+    "re_entry (止损后重新进场, 重置 step_1)",
+    "manual (自定义, 不计入档位)",
+  ];
+
+  const stepInput = prompt(
+    "➕ 加仓 " + ticker + "\n" +
+    "现价: $" + cp.toFixed(2) + "\n" +
+    "当前持仓: " + h.shares + " 股 @ 均价 $" + h.buy_price.toFixed(2) + "\n" +
+    "step_1 锚价: $" + (h.step_1_price || h.buy_price).toFixed(2) + "\n" +
+    "已执行: " + (executed.length ? executed.join(",") : "无") + "\n\n" +
+    "本次加仓属于哪个档位?\n" +
+    stepOptions.map(s => "  " + s).join("\n") + "\n\n" +
+    "建议: " + suggest.label + (suggest.hit === false ? " — 价格还没到，确认要加?" : ""),
+    suggest.step
   );
+  if(!stepInput) return;
+  const step = stepInput.trim().toLowerCase();
+
+  const sharesStr = prompt("加仓股数?", "5");
   if(!sharesStr) return;
   const shares = parseFloat(sharesStr);
   if(isNaN(shares) || shares <= 0){ alert('股数无效'); return; }
+
   const pxStr = prompt("成交价 ($)?", cp.toFixed(2));
   if(!pxStr) return;
   const px = parseFloat(pxStr);
   if(isNaN(px) || px <= 0){ alert('价格无效'); return; }
+
+  if(!confirm("档位: " + step + "\n加 " + shares + " 股 @ $" + px.toFixed(2) + "\n确认?")) return;
+
   try{
-    await pfAddBatch(ticker, px, shares);
+    const resp = await fetch("/api/holdings/upsert", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ticker, shares, buy_price: px, step}),
+    });
+    if(!resp.ok){ alert("加仓失败: " + (await resp.text())); return; }
+    _pfCache = null;
+    await pfLoad();
     const newH = (await pfLoad())[ticker];
-    alert("✓ 已加仓 "+shares+" 股 @ $"+px.toFixed(2)+
-          "\n新持仓: "+newH.shares+" 股 @ 均价 $"+newH.buy_price.toFixed(2));
+    alert("✓ 已加仓 " + shares + " 股 @ $" + px.toFixed(2) + " (" + step + ")\n" +
+          "新持仓: " + newH.shares + " 股 @ 均价 $" + newH.buy_price.toFixed(2));
     renderPortfolioView();
     render();
-  }catch(e){ alert("加仓失败: "+e.message); }
+  }catch(e){ alert("加仓失败: " + e.message); }
 }
 
 async function promptReduce(ticker){
-  // Reduce by N shares (records partial sale, updates total via update_shares).
+  // Reduce by N shares; ALSO mark which tier this reduction satisfies.
   const pf = await pfLoad();
   const h = pf[ticker];
   if(!h){ alert('未找到 '+ticker+' 持仓'); return; }
+  const r = (data && data.rows || []).find(x => x.ticker === ticker);
+  const px = r ? r.latest_price : h.buy_price;
+  const ret = h.buy_price > 0 ? (px / h.buy_price - 1) * 100 : 0;
+
+  // Auto-detect default tier from current ret%
+  const exec = h.tiers_executed || [];
+  let defaultTier = "manual";
+  let defaultShares = Math.floor(h.shares / 2);
+  const peak = (h.peak_shares != null && h.peak_shares > 0) ? h.peak_shares : h.shares;
+  if(ret <= -8){ defaultTier = "stop_loss"; defaultShares = Math.floor(h.shares); }
+  else if(ret >= 30 && !exec.includes("tier_3")){ defaultTier = "tier_3"; defaultShares = Math.min(h.shares, Math.max(1, Math.floor(peak * 0.33))); }
+  else if(ret >= 20 && !exec.includes("tier_2")){ defaultTier = "tier_2"; defaultShares = Math.min(h.shares, Math.max(1, Math.floor(peak * 0.25))); }
+  else if(ret >= 10 && !exec.includes("tier_1")){ defaultTier = "tier_1"; defaultShares = Math.min(h.shares, Math.max(1, Math.floor(peak * 0.25))); }
+
+  const tierMap = {
+    tier_1:    "tier_1 (+10% 锁首档 25%)",
+    tier_2:    "tier_2 (+20% 第二档 25%)",
+    tier_3:    "tier_3 (+30% 第三档 33%)",
+    stop_loss: "stop_loss (-8% 硬止损全清)",
+    conv_break:"conv_break (Conv<45 减半)",
+    flash_8:   "flash_8 (单日 -8% 减 70%)",
+    manual:    "manual (自定义, 不计入档位)",
+  };
+
+  // Build options list (skip already-executed tiers)
+  const options = Object.keys(tierMap)
+    .filter(k => !(k.startsWith("tier_") && exec.includes(k)))
+    .map(k => "  " + k + " — " + tierMap[k].split(" — ")[0]);
+
+  const tierStr = prompt(
+    "➖ 减仓 " + ticker + "\n" +
+    "当前持仓: " + h.shares + " 股 @ 均价 $" + h.buy_price.toFixed(2) + "\n" +
+    "现价: $" + px.toFixed(2) + " (" + (ret>=0?"+":"") + ret.toFixed(1) + "%)\n" +
+    "峰值: " + peak + " 股, 已执行: " + (exec.length ? exec.join(",") : "无") + "\n\n" +
+    "本次减仓属于哪个档位? (回车用默认):\n" +
+    options.join("\n"),
+    defaultTier
+  );
+  if(!tierStr) return;
+  const reason = tierStr.trim().toLowerCase();
+
   const sharesStr = prompt(
-    "➖ 减仓 "+ticker+"\n当前持仓: "+h.shares+" 股 @ 均价 $"+h.buy_price.toFixed(2)+
-    "\n\n卖出多少股? (输入 "+h.shares+" 清仓)",
-    Math.floor(h.shares/2).toString()
+    "卖出多少股? (输入 " + h.shares + " 清仓)",
+    defaultShares.toString()
   );
   if(!sharesStr) return;
   const sell = parseFloat(sharesStr);
   if(isNaN(sell) || sell <= 0){ alert('股数无效'); return; }
   if(sell > h.shares){ alert('卖出股数不能超过持仓 '+h.shares); return; }
   const remaining = +(h.shares - sell).toFixed(6);
-  const verb = remaining <= 0 ? "清仓" : ("减至 "+remaining+" 股");
-  if(!confirm("确认 "+verb+" "+ticker+"? (卖 "+sell+" 股)")) return;
+
+  if(!confirm("档位: " + reason + "\n卖 " + sell + " 股 @ $" + px.toFixed(2) +
+              "\n剩 " + (remaining<=0?"0 (清仓)":remaining+" 股") + "\n\n确认?")) return;
+
   try{
-    await pfUpdateShares(ticker, remaining);
-    if(remaining <= 0){
-      alert("✓ 已清仓 "+ticker);
-    } else {
-      alert("✓ 已减仓 "+sell+" 股, 剩 "+remaining+" 股");
-    }
+    const resp = await fetch("/api/holdings/update_shares", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ticker, shares: remaining, reason, price: px})
+    });
+    if(!resp.ok){ alert("减仓失败: " + (await resp.text())); return; }
+    _pfCache = null;
+    await pfLoad();
+    alert("✓ " + (remaining<=0?"已清仓":"已减 "+sell+" 股") + " (" + reason + ")");
     renderPortfolioView();
     render();
-  }catch(e){ alert("减仓失败: "+e.message); }
+  }catch(e){ alert("减仓失败: " + e.message); }
 }
 
 
@@ -853,6 +955,47 @@ function renderPlaybook(r){
   return html;
 }
 
+// Peak shares = max shares ever held. Used for tier-aware profit taking.
+// Returns the "denominator" against which 25%/25%/33% tiers compute.
+function getPeakShares(h){
+  if(h.peak_shares != null && h.peak_shares > 0) return h.peak_shares;
+  const sumPos = (h.batches || []).reduce((s, b) => s + (b.shares > 0 ? b.shares : 0), 0);
+  return Math.max(h.shares || 0, sumPos);
+}
+
+// Tier execution is now PERSISTED explicitly in h.tiers_executed[].
+// We still derive soldFrac for display purposes, but the verb decisions read
+// the explicit array — no more heuristic thresholds.
+//
+// Backwards-compat: if a holding has no tiers_executed but soldFrac suggests
+// tiers were hit (e.g. user reduced before this refactor), we infer from
+// soldFrac on first read (lossy migration).
+function tierStatus(h){
+  const peak = getPeakShares(h);
+  const cur = h.shares || 0;
+  const soldFrac = peak > 0 ? (peak - cur) / peak : 0;
+  const executed = h.tiers_executed || [];
+
+  // Backwards-compat migration: if no explicit tier log but shares dropped,
+  // infer (best-effort) which tiers were likely hit.
+  let inferred = new Set(executed);
+  if(executed.length === 0 && soldFrac > 0.05){
+    if(soldFrac >= 0.18) inferred.add("tier_1");
+    if(soldFrac >= 0.42) inferred.add("tier_2");
+    if(soldFrac >= 0.68) inferred.add("tier_3");
+  }
+
+  return {
+    peak,
+    soldFrac,
+    executed: Array.from(inferred),
+    tier1Done: inferred.has("tier_1"),
+    tier2Done: inferred.has("tier_2"),
+    tier3Done: inferred.has("tier_3"),
+    inferredOnly: executed.length === 0 && inferred.size > 0,  // shows "?" badge in UI
+  };
+}
+
 function renderPortfolioView(){
   const pf=pfLoadSync();
   const tickers=Object.keys(pf);
@@ -903,32 +1046,67 @@ function renderPortfolioView(){
         verb="SELL"; verb_color="#f39c12";
         action_text="⚠️ 卖一半 "+Math.floor(h.shares/2)+" 股 (50%)";
         reason="Conv "+conv+" < 45，仓位减半";
-      }else if(ret>=30){
+      }else if(ret>=30 && !tierStatus(h).tier3Done){
         verb="SELL"; verb_color="#3fb950";
-        const sellN = Math.floor(h.shares*0.33);
-        action_text="💰 卖 "+sellN+" 股 (33%)";
-        reason="+"+ret.toFixed(1)+"% 锁利润，剩 "+(h.shares-sellN)+" 股骑趋势";
-      }else if(ret>=20){
+        const ts = tierStatus(h);
+        const target = Math.max(1, Math.floor(ts.peak * 0.33));
+        const sellN = Math.min(h.shares, target);
+        action_text="💰 卖 "+sellN+" 股 (tier 3: +30%)";
+        reason="+"+ret.toFixed(1)+"% 锁 33%/峰值仓 ("+ts.peak+"股), 剩 "+(h.shares-sellN)+" 股骑趋势";
+      }else if(ret>=20 && !tierStatus(h).tier2Done){
         verb="SELL"; verb_color="#3fb950";
-        const sellN = Math.floor(h.shares*0.25);
-        action_text="💰 卖 "+sellN+" 股 (25%)";
-        reason="+"+ret.toFixed(1)+"% 第二档止盈，剩 "+(h.shares-sellN)+" 股";
-      }else if(pb && pb.entry_plan && h.batches && h.batches.length<pb.entry_plan.length){
-        const next=pb.entry_plan[h.batches.length];
-        if(next && px>=next.price*0.99){
-          verb="BUY"; verb_color="#3fb950";
-          const buyCash = (next.shares * next.price).toFixed(0);
-          action_text="➕ 加仓 "+next.shares+" 股 (≈$"+buyCash+")";
-          reason="第 "+next.step+" 批加仓点 $"+next.price+" 已触发";
+        const ts = tierStatus(h);
+        const target = Math.max(1, Math.floor(ts.peak * 0.25));
+        const sellN = Math.min(h.shares, target);
+        action_text="💰 卖 "+sellN+" 股 (tier 2: +20%)";
+        reason="+"+ret.toFixed(1)+"% 第二档止盈, 25%/峰值仓 ("+ts.peak+"股), 剩 "+(h.shares-sellN)+" 股";
+      }else if((ret>=30 || ret>=20) && tierStatus(h).tier2Done){
+        // High return but already executed tiers 1+2 — hold rest for trail stop
+        verb="HOLD"; verb_color="#3fb950";
+        const ts = tierStatus(h);
+        action_text="✓ 持有余仓 (已锁 "+(ts.soldFrac*100).toFixed(0)+"%)";
+        reason="+"+ret.toFixed(1)+"% 已跑过 tier 1+2，余仓 "+h.shares+" 股 SMA20 追踪";
+      }else if(pb && pb.entry_plan){
+        // Stateful entry-ladder: read entry_steps_executed (anchored to step_1 price)
+        const executed = (h.entry_steps_executed || []).map(e => (typeof e === 'string') ? e : e.step);
+        const step1Price = h.step_1_price || (h.batches && h.batches[0] && h.batches[0].price) || h.buy_price;
+        let nextStep = null, threshold = null;
+        if(!executed.includes("step_2")){
+          nextStep = "step_2"; threshold = step1Price * 1.03;
+        } else if(!executed.includes("step_3")){
+          nextStep = "step_3"; threshold = step1Price * 1.06;
+        }
+        if(nextStep && px >= threshold * 0.99){
+          // Use playbook's suggested share count for the appropriate step
+          const planIdx = nextStep === "step_2" ? 1 : 2;
+          const nextPlan = pb.entry_plan[planIdx] || pb.entry_plan[pb.entry_plan.length - 1];
+          if(nextPlan){
+            verb = "BUY"; verb_color = "#3fb950";
+            const buyCash = (nextPlan.shares * threshold).toFixed(0);
+            action_text = "➕ 加仓 " + nextPlan.shares + " 股 (" + nextStep + ", ≈$" + buyCash + ")";
+            reason = nextStep + " 触发点 $" + threshold.toFixed(2) + " 已达 (锚于 step_1 $" + step1Price.toFixed(2) + ")";
+          }
         }
       }
       if(verb==="HOLD"){
-        if(ret>=10){
+        const ts = tierStatus(h);
+        if(ret>=10 && !ts.tier1Done){
           verb_color="#3fb950";
-          action_text="⬆️ 卖 "+Math.floor(h.shares*0.25)+" 股 (25%) 锁首档利润";
-          reason="+"+ret.toFixed(1)+"%，第一档止盈触发，止损上移到买入价 $"+h.buy_price.toFixed(2);
+          const target = Math.max(1, Math.floor(ts.peak * 0.25));
+          const sellN = Math.min(h.shares, target);
+          action_text="⬆️ 卖 "+sellN+" 股 (tier 1: +10%)";
+          reason="+"+ret.toFixed(1)+"%，首档止盈，25%/峰值仓 ("+ts.peak+"股)，止损上移到买入价 $"+h.buy_price.toFixed(2);
+        }
+        else if(ret>=10 && ts.tier1Done){
+          // Tier 1 already executed — wait for tier 2 at +20%
+          action_text="✓ 持有余仓 (tier 1 ✅)";
+          reason="+"+ret.toFixed(1)+"% 已锁首档，等 +20% 触发 tier 2 (≈ $"+(h.buy_price*1.20).toFixed(2)+")";
         }
         else if(ret<-3){ verb_color="#f39c12"; action_text="👀 盯紧止损 (-8% = $"+personal_stop.toFixed(2)+")"; reason=ret.toFixed(1)+"%，接近止损线"; }
+        else if(ts.soldFrac > 0){
+          action_text="✓ 持有余仓";
+          reason="已减仓 "+(ts.soldFrac*100).toFixed(0)+"% (峰值 "+ts.peak+" 股→现 "+h.shares+" 股)，等下个触发点";
+        }
         else { action_text="✓ 持有不动"; reason="新仓发酵中，未触发任何买卖点"; }
       }
     }
@@ -986,17 +1164,22 @@ function renderPortfolioView(){
       const sysAction = c.r ? (c.r.action||"-") : "-";
       const sysActionMeta = (data.action_meta && data.action_meta[sysAction]) || {emoji:"",label:sysAction,color:"#8b949e"};
       const isPri = c.r && c.r.is_priority;
-      // Batch progress + held days
-      const usedBatches = (c.h.batches||[]).length;
-      const planned = (c.r && c.r.playbook && c.r.playbook.entry_plan) ? c.r.playbook.entry_plan.length : usedBatches;
+      // Batch progress — uses explicit entry_steps_executed[] (not batches.length,
+      // which over-counts DCA adds as ladder steps)
+      const executedSteps = (c.h.entry_steps_executed || []).map(e => (typeof e === 'string') ? e : e.step);
+      const usedBatches = executedSteps.filter(s => ["step_1","step_2","step_3"].includes(s)).length;
+      const planned = (c.r && c.r.playbook && c.r.playbook.entry_plan) ? c.r.playbook.entry_plan.length : 3;
       const heldDays = c.h.buy_date ? Math.floor((Date.now()-new Date(c.h.buy_date).getTime())/86400000) : 0;
       let nextBatchInfo = "";
-      if(c.r && c.r.playbook && c.r.playbook.entry_plan && usedBatches < planned){
-        const next = c.r.playbook.entry_plan[usedBatches];
-        if(next){
-          const distPct = ((next.price/c.px-1)*100);
-          nextBatchInfo = "下一批 $"+next.price+" (距+"+distPct.toFixed(1)+"%)";
-        }
+      const step1Anchor = c.h.step_1_price || (c.h.batches && c.h.batches[0] && c.h.batches[0].price) || c.h.buy_price;
+      if(!executedSteps.includes("step_2") && executedSteps.includes("step_1")){
+        const thresh = step1Anchor * 1.03;
+        const distPct = ((thresh/c.px-1)*100);
+        nextBatchInfo = "下一批 step_2 @ $"+thresh.toFixed(2)+" (距"+(distPct>=0?"+":"")+distPct.toFixed(1)+"%)";
+      } else if(!executedSteps.includes("step_3") && executedSteps.includes("step_2")){
+        const thresh = step1Anchor * 1.06;
+        const distPct = ((thresh/c.px-1)*100);
+        nextBatchInfo = "下一批 step_3 @ $"+thresh.toFixed(2)+" (距"+(distPct>=0?"+":"")+distPct.toFixed(1)+"%)";
       }
 
       const isExternal = c.h.category === "etf" || c.h.category === "external";
@@ -1043,26 +1226,30 @@ function renderPortfolioView(){
         html+='<div style="font-size:11px;color:#c9d1d9;margin-top:3px">'+c.reason+'</div>';
         html+='</div>';
 
-        // ====== 止盈 + 止损 完整阶梯 (基于你的买入价) ======
+        // ====== 止盈 + 止损 完整阶梯 (peak-aware) ======
         const buyP = c.h.buy_price;
-        const totShares = c.h.shares;
+        const ts = tierStatus(c.h);     // {peak, soldFrac, tier1Done, tier2Done, tier3Done}
+        const peakShares = ts.peak;
         const stop_p_full = buyP * 0.92;
         const tp1_p = buyP * 1.10;
         const tp2_p = buyP * 1.20;
         const tp3_p = buyP * 1.30;
-        const tp1_n = Math.floor(totShares * 0.25);
-        const tp2_n = Math.floor(totShares * 0.33);
-        const half_n = Math.floor(totShares / 2);
-        const hit = (target) => c.px >= target;
+        const tp1_n = Math.max(1, Math.floor(peakShares * 0.25));
+        const tp2_n = Math.max(1, Math.floor(peakShares * 0.25));
+        const tp3_n = Math.max(1, Math.floor(peakShares * 0.33));
+        const half_n = Math.max(1, Math.floor(c.h.shares / 2));
         const lossHit = c.px <= stop_p_full;
-        // Status emoji per row
-        const mark = (done) => done ? '✅' : '⏳';
+        // Mark a tier ✅ if it's been executed, ⏳ if waiting, 🟡 if price hit but not executed.
+        const markTier = (done, priceHit) => done ? '✅' : (priceHit ? '🟡' : '⏳');
         html+='<div style="background:#0d1218;border:1px solid #21262d;border-radius:5px;padding:8px 10px;margin-bottom:8px;font-size:10.5px">';
-        html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><strong style="color:#3fb950">📊 止盈阶梯</strong><span style="color:#8b949e;font-size:9.5px">(基于你买入价 $'+buyP.toFixed(2)+')</span></div>';
+        const peakNote = peakShares !== c.h.shares
+            ? ' · 峰值 '+peakShares+'股 / 现 '+c.h.shares+'股 (已减 '+(ts.soldFrac*100).toFixed(0)+'%)'
+            : '';
+        html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><strong style="color:#3fb950">📊 止盈阶梯</strong><span style="color:#8b949e;font-size:9.5px">(买入价 $'+buyP.toFixed(2)+peakNote+')</span></div>';
         html+='<div style="display:grid;grid-template-columns:auto auto 1fr auto;column-gap:8px;row-gap:3px;color:#c9d1d9">';
-        html+='<span>'+mark(hit(tp1_p))+'</span><span class="num" style="color:#3fb950">+10%</span><span>$'+tp1_p.toFixed(2)+' → 卖 25% ('+tp1_n+'股)</span><span style="color:#8b949e">止损升保本</span>';
-        html+='<span>'+mark(hit(tp2_p))+'</span><span class="num" style="color:#3fb950">+20%</span><span>$'+tp2_p.toFixed(2)+' → 卖 25% ('+tp1_n+'股)</span><span style="color:#8b949e">止损升+5%</span>';
-        html+='<span>'+mark(hit(tp3_p))+'</span><span class="num" style="color:#3fb950">+30%</span><span>$'+tp3_p.toFixed(2)+' → 卖 33% ('+tp2_n+'股)</span><span style="color:#8b949e">余仓 SMA20 追踪</span>';
+        html+='<span>'+markTier(ts.tier1Done, c.px>=tp1_p)+'</span><span class="num" style="color:#3fb950">+10%</span><span>$'+tp1_p.toFixed(2)+' → 卖 25% ('+tp1_n+'股)'+(ts.tier1Done?' <span style="color:#3fb950">已执行</span>':'')+'</span><span style="color:#8b949e">止损升保本</span>';
+        html+='<span>'+markTier(ts.tier2Done, c.px>=tp2_p)+'</span><span class="num" style="color:#3fb950">+20%</span><span>$'+tp2_p.toFixed(2)+' → 卖 25% ('+tp2_n+'股)'+(ts.tier2Done?' <span style="color:#3fb950">已执行</span>':'')+'</span><span style="color:#8b949e">止损升+5%</span>';
+        html+='<span>'+markTier(ts.tier3Done, c.px>=tp3_p)+'</span><span class="num" style="color:#3fb950">+30%</span><span>$'+tp3_p.toFixed(2)+' → 卖 33% ('+tp3_n+'股)'+(ts.tier3Done?' <span style="color:#3fb950">已执行</span>':'')+'</span><span style="color:#8b949e">余仓 SMA20 追踪</span>';
         html+='</div>';
         html+='<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #30363d;display:flex;justify-content:space-between;align-items:center"><strong style="color:#ff6b6b">🛑 止损阶梯</strong><span style="color:#8b949e;font-size:9.5px">硬规则</span></div>';
         html+='<div style="display:grid;grid-template-columns:auto auto 1fr auto;column-gap:8px;row-gap:3px;margin-top:3px;color:#c9d1d9">';
@@ -1090,187 +1277,4 @@ function renderPortfolioView(){
           html+='<span>批次:</span>';
           for(let i=0;i<planned;i++){
             const filled = i < usedBatches;
-            html+='<div style="flex:1;height:5px;background:'+(filled?"#3fb950":"#21262d")+';border-radius:2px"></div>';
-          }
-          html+='<span>'+usedBatches+'/'+planned+'</span>';
-          html+='</div>';
-          if(nextBatchInfo)html+='<div style="font-size:10px;color:#58a6ff;margin-bottom:6px">📈 '+nextBatchInfo+'</div>';
-        } else if(planned > 1 && usedBatches < planned){
-          html+='<div style="font-size:10px;color:#8b949e;margin-bottom:6px">📌 已过入场阶段 (+'+c.ret.toFixed(1)+'%), 不再追加批次</div>';
-        }
-        html+='<div style="display:flex;gap:4px"><button onclick="event.stopPropagation();promptAddBatch(\''+c.t+'\','+c.px+')" style="flex:1;background:#3fb950;color:#000;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">➕ 加仓</button>';
-        html+='<button onclick="event.stopPropagation();promptReduce(\''+c.t+'\')" style="flex:1;background:#f39c12;color:#000;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">➖ 减仓</button>';
-        html+='<button onclick="event.stopPropagation();editHolding(\''+c.t+'\')" style="flex:1;background:#58a6ff;color:#000;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">✏️ 编辑</button>';
-        html+='<button onclick="event.stopPropagation();if(confirm(\'确认清仓 '+c.t+'?\')){pfRemove(\''+c.t+'\').then(()=>{renderPortfolioView();render();});}" style="flex:1;background:#d63031;color:#fff;border:none;padding:5px 2px;border-radius:4px;font-size:10.5px;font-weight:600;cursor:pointer">🚪 清仓</button>';
-        html+='</div></div>';
-      }
-    }
-    html+='</div></div>';
-  }
-
-  html+='</div>';
-  document.getElementById('pf-content').innerHTML=html;
-}
-
-document.querySelectorAll(".view-tab").forEach(b=>{
-  b.addEventListener("click",()=>{
-    document.querySelectorAll(".view-tab").forEach(x=>x.classList.remove("active"));
-    document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
-    b.classList.add("active");
-    const target=b.dataset.view;
-    const v=document.getElementById("view-"+target);
-    if(v)v.classList.add("active");
-    if(target==="backtest"&&typeof loadBacktest==="function")loadBacktest();
-    if(target==="portfolio")renderPortfolioView();
-  });
-});
-
-let _btLoaded=false;
-async function loadBacktest(){
-  if(_btLoaded)return;
-  try{
-    const r=await fetch((typeof apiBacktest!=="undefined"?apiBacktest:"../data/backtest_results.json")+"?_="+Date.now());
-    if(!r.ok){document.getElementById("bt-content").innerHTML='<div class="empty-bt"><p>回测数据未生成</p><p><code>python scripts/bt_v36.py</code></p></div>';return;}
-    const bt=await r.json();
-    _btLoaded=true;
-    const s=bt.summary||{};
-    const stat=(l,v,c)=>'<div class="stat"><div class="label">'+l+'</div><div class="value '+(c||"")+'">'+v+'</div></div>';
-    const cls=v=>v>=0?"up":"down";
-    const fp=v=>(v>=0?"+":"")+(v*100).toFixed(2)+"%";
-    let h='<div class="backtest-grid">';
-    h+=stat("★ 策略总收益",fp(s.strategy_total_return||0),cls(s.strategy_total_return||0));
-    h+=stat("SPY 总收益",fp(s.spy_total_return||0),cls(s.spy_total_return||0));
-    h+=stat("Sharpe",(s.sharpe_ratio||0).toFixed(2));
-    h+=stat("最大回撤",((s.max_drawdown||0)*100).toFixed(2)+"%","down");
-    h+=stat("周胜率",((s.win_rate||0)*100).toFixed(1)+"%");
-    h+=stat("总周数",s.n_weeks||0);
-    h+='</div>';
-    const labels={S1:"B&H SPY",S2:"6M-Mom Top3",S3:"Comp Top10",S4:"3-Gate+ATR",S5:"Conviction",S6:"★ S6 Hybrid+Stop"};
-    let rs="";
-    for(const k of ["S1","S2","S3","S4","S5","S6"]){
-      const m=s[k+"_metrics"]; if(!m)continue;
-      const star=k==="S6"?' style="background:#1a3a1f;font-weight:600"':"";
-      rs+="<tr"+star+'><td style="padding:6px 12px">'+labels[k]+'</td><td class="num '+cls(m.total_return||0)+'" style="padding:6px 12px">'+fp(m.total_return||0)+'</td><td class="num" style="padding:6px 12px">'+(m.sharpe||0).toFixed(2)+'</td><td class="num down" style="padding:6px 12px">'+((m.max_drawdown||0)*100).toFixed(2)+'%</td><td class="num" style="padding:6px 12px">'+((m.win_rate||0)*100).toFixed(1)+'%</td></tr>';
-    }
-    h+='<div class="chart-wrap"><h3>策略横评 (★ = 你的策略)</h3><table style="width:100%;font-size:12px"><thead style="background:#1a1f26"><tr><th style="padding:8px 12px;text-align:left">策略</th><th class="num" style="padding:8px 12px">收益</th><th class="num" style="padding:8px 12px">Sharpe</th><th class="num" style="padding:8px 12px">MaxDD</th><th class="num" style="padding:8px 12px">胜率</th></tr></thead><tbody>'+rs+'</tbody></table></div>';
-    document.getElementById("bt-content").innerHTML=h;
-  }catch(e){document.getElementById("bt-content").innerHTML='<div class="empty-bt">加载失败: '+e.message+'</div>';}
-}
-
-async function editAccountTotal(){
-  const cur=(data&&data.portfolio_config&&data.portfolio_config.account_total_usd)||
-            (data&&data.portfolio_config&&data.portfolio_config.portfolio_cash_usd)||20000;
-  const v=prompt("设置你的总账户金额 (美元)\n这个数字用于计算现金剩余",cur);
-  if(!v||isNaN(v))return;
-  const n=parseFloat(v);
-  try{
-    const r=await fetch("/api/portfolio_config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_total_usd:n})});
-    if(r.ok){
-      if(data&&data.portfolio_config){
-        data.portfolio_config.account_total_usd=n;
-      }
-      renderPortfolioView();
-    }
-  }catch(e){alert("更新失败: "+e.message);}
-}
-
-async function editHolding(ticker){
-  const pf = await pfLoad();
-  const h = pf[ticker];
-  if(!h){alert('找不到持仓 '+ticker); return;}
-  const newPrice = prompt('修改 '+ticker+' 的买入均价 ($)', h.buy_price);
-  if(newPrice===null) return;
-  const newShares = prompt('修改 '+ticker+' 的持股数', h.shares);
-  if(newShares===null) return;
-  const newDate = prompt('修改 '+ticker+' 的买入日期 (YYYY-MM-DD)', h.buy_date||'2025-01-01');
-  if(newDate===null) return;
-  const body = {ticker, buy_price: parseFloat(newPrice), shares: parseFloat(newShares), buy_date: newDate};
-  if(_useServerPF){
-    try{
-      const r = await fetch('/api/holdings/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      if(!r.ok){alert('编辑失败: '+(await r.text())); return;}
-      _pfCache=null;
-      await pfLoad();
-    }catch(e){alert('编辑失败: '+e.message); return;}
-  }else{
-    const pfL = pfLoadSync();
-    pfL[ticker] = {...pfL[ticker], buy_price: body.buy_price, shares: body.shares, buy_date: body.buy_date};
-    localStorage.setItem(PF_KEY,JSON.stringify(pfL));
-    _pfCache=null;
-  }
-  renderPortfolioView();
-  render();
-}
-
-// ===== Conviction history (sparkline) =====
-let _convHistory = null;
-async function loadConvHistory(){
-  if(_convHistory)return _convHistory;
-  if(!isLocalServer){ _convHistory={}; return _convHistory; }
-  try{
-    const r = await fetch("/api/conviction_history");
-    if(r.ok){ _convHistory = await r.json(); return _convHistory; }
-  }catch(e){}
-  _convHistory = {};
-  return _convHistory;
-}
-function renderSparkline(ticker, width=120, height=24){
-  const hist = (_convHistory && _convHistory[ticker]) || [];
-  if(hist.length < 2)return '<span style="color:#8b949e;font-size:10px">无历史数据</span>';
-  const recent = hist.slice(-12); // last 12 data points
-  const values = recent.map(h => h.conv);
-  const minV = Math.min(...values, 0);
-  const maxV = Math.max(...values, 100);
-  const range = Math.max(maxV - minV, 1);
-  const dx = width / (recent.length - 1);
-  let points = '';
-  for(let i=0; i<recent.length; i++){
-    const x = i * dx;
-    const y = height - ((values[i] - minV) / range * (height - 4)) - 2;
-    points += (i===0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1) + " ";
-  }
-  const lastV = values[values.length - 1];
-  const firstV = values[0];
-  const trend = lastV - firstV;
-  const lineColor = trend > 5 ? "#3fb950" : (trend < -5 ? "#d63031" : "#8b949e");
-  const y60 = height - ((60 - minV) / range * (height - 4)) - 2;
-  let svg = '<svg width="'+width+'" height="'+height+'" style="vertical-align:middle">';
-  svg += '<line x1="0" y1="'+y60.toFixed(1)+'" x2="'+width+'" y2="'+y60.toFixed(1)+'" stroke="#444" stroke-dasharray="2,2" stroke-width="0.5"/>';
-  svg += '<path d="'+points+'" stroke="'+lineColor+'" stroke-width="1.5" fill="none"/>';
-  const lastX = (recent.length - 1) * dx;
-  const lastY = height - ((lastV - minV) / range * (height - 4)) - 2;
-  svg += '<circle cx="'+lastX.toFixed(1)+'" cy="'+lastY.toFixed(1)+'" r="2" fill="'+lineColor+'"/>';
-  svg += '</svg>';
-  const trendText = trend >= 0 ? "+"+trend.toFixed(0) : trend.toFixed(0);
-  return svg + ' <span style="color:'+lineColor+';font-size:10px">'+trendText+'</span>';
-}
-
-async function importHoldings(){
-  const json = prompt("粘贴 my_holdings_backup.json 内容 (从导出按钮下载的文件)\n注意：会替换当前所有持仓！");
-  if(!json)return;
-  let parsed;
-  try{ parsed = JSON.parse(json); }catch(e){ alert("JSON 格式错误: "+e.message); return; }
-  if(!confirm("即将替换当前 "+Object.keys(pfLoadSync()).length+" 个持仓为新的 "+Object.keys(parsed).length+" 个，确定?"))return;
-  try{
-    const r = await fetch("/api/holdings/import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(parsed)});
-    if(!r.ok){alert("导入失败: "+await r.text()); return;}
-    _pfCache=null;
-    await pfLoad();
-    renderPortfolioView();
-    render();
-    alert("已导入 "+Object.keys(parsed).length+" 个持仓");
-  }catch(e){alert("导入失败: "+e.message);}
-}
-
-// Boot
-(async()=>{
-  await pfLoad();
-  await refreshPortfolioCount();
-  await loadConvHistory();
-  loadData();
-})();
-setInterval(()=>{if(document.getElementById("view-dashboard").classList.contains("active"))loadData();},60000);
-setInterval(()=>{if(data){const e=document.getElementById("last-updated");if(e&&e.textContent.indexOf("更新于")===0)e.textContent="更新于 "+fmtAgo(data.generated_at);}},30000);
-</script>
-</body>
-</html>
+            html+='<div style="flex:1;height:5px;background:'+(filled?"#3fb950":"#21262d")+';bord
