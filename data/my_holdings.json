@@ -99,14 +99,20 @@
   },
   "QCOM": {
     "ticker": "QCOM",
-    "shares": 40,
-    "buy_price": 221.0,
+    "shares": 49,
+    "buy_price": 219.34,
     "buy_date": "2025-05-01",
     "batches": [
       {
         "price": 221.0,
         "shares": 40,
         "date": "2025-05-01"
+      },
+      {
+        "price": 199.0,
+        "shares": 9,
+        "date": "2026-05-12",
+        "_note": "post-13% dip add"
       }
     ],
     "_imported": "from Fidelity 2026-05-11"
@@ -127,17 +133,32 @@
   },
   "DRAM": {
     "ticker": "DRAM",
-    "shares": 200,
-    "buy_price": 52.56,
-    "buy_date": "2025-07-01",
+    "shares": 234.385,
+    "buy_price": 52.18,
+    "buy_date": "2026-05-08",
     "batches": [
       {
-        "price": 52.56,
+        "price": 52.55,
         "shares": 200,
-        "date": "2025-07-01"
+        "date": "2026-05-08"
+      },
+      {
+        "price": 48.66,
+        "shares": 14,
+        "date": "2026-05-12"
+      },
+      {
+        "price": 48.68,
+        "shares": 0.385,
+        "date": "2026-05-12"
+      },
+      {
+        "price": 51.0,
+        "shares": 20,
+        "date": "2026-05-12"
       }
     ],
-    "_imported": "from Fidelity 2026-05-11 - memory ETF, promoted to AI universe"
+    "_note": "AI 链 内存主题 (替代韩股 Hynix/Samsung 不可买)"
   },
   "QQQM": {
     "ticker": "QQQM",

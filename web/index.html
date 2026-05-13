@@ -82,6 +82,7 @@ tr.detail td{background:#0d1218;padding:14px 20px;border-bottom:2px solid var(--
 <div id="mock-banner" class="mock-banner" style="display:none">⚠️ MOCK 数据。生产用 <code>python serve.py</code></div>
 <div id="crash-banner" style="display:none;background:linear-gradient(90deg,#d63031,#ff6b6b);color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:700;border-bottom:2px solid #ff4757"></div>
 <div id="stale-banner" style="display:none;background:#f39c12;color:#000;text-align:center;padding:6px;font-size:12px;font-weight:700"></div>
+<div id="near-miss-banner" style="display:none;background:rgba(243,156,18,.12);border-bottom:1px solid #f39c12;color:#f39c12;text-align:center;padding:6px 12px;font-size:12px;font-weight:600"></div>
 <div id="pending-alerts" style="display:none;background:#1a0e10;border-bottom:2px solid #d63031;padding:10px 16px"></div>
 <div class="view-tabs">
   <button class="view-tab active" data-view="dashboard">📊 实时看板</button>
@@ -201,6 +202,7 @@ async function loadData(){
     }
     updateCrashBanner();
     updateStaleBanner();
+    updateNearMissBanner();
     loadPendingAlerts();
     updateCounts();render();
   }catch(e){
@@ -267,6 +269,39 @@ async function dismissAlert(ticker, id, snoozeHours){
     });
     await loadPendingAlerts();
   }catch(e){ alert("操作失败: "+e); }
+}
+
+// ===== Near-miss warning =====
+// daily ≤ -7% but > -8% — display only, no SELL recommendation.
+// Backtest shows acting at -5/-7% destroys returns; this is purely "知会".
+function updateNearMissBanner(){
+  if(!data) return;
+  const banner = document.getElementById("near-miss-banner");
+  if(!banner) return;
+  try{
+    const pf = pfLoadSync ? pfLoadSync() : {};
+    const rowMap = {};
+    (data.rows || []).forEach(r => { rowMap[r.ticker] = r; });
+    const near = [];
+    for(const t of Object.keys(pf)){
+      const r = rowMap[t];
+      if(!r) continue;
+      const cat = pf[t].category;
+      if(cat === "etf" || cat === "external") continue;  // ETF skips strategy
+      const daily = r.daily_return_pct || 0;
+      if(daily <= -7 && daily > -8){
+        near.push({t, daily: daily.toFixed(2), dist: (Math.abs(daily) - 8 > 0 ? 0 : (8 + daily)).toFixed(2)});
+      }
+    }
+    if(near.length === 0){
+      banner.style.display = "none";
+      return;
+    }
+    const parts = near.map(x => `<strong>${x.t}</strong> 单日 ${x.daily}%（差 ${x.dist}pp 触发 -8%）`);
+    banner.innerHTML = "⚠️ 近触发观察 (距 flash_8 < 1pp): " + parts.join(" · ") +
+                       "  <span style='color:#8b949e'>— 仅知会，不建议操作</span>";
+    banner.style.display = "block";
+  }catch(e){}
 }
 
 // ===== Stale-data warning =====
