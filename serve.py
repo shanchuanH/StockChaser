@@ -231,6 +231,17 @@ def run_pipeline(use_mock=False):
     except Exception as exc:
         print("alerts.py error: " + str(exc))
 
+    # Dynamic stop-loss ratchet — monotonic upward as浮盈 hits +10/+20/+30 milestones
+    try:
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "dynamic_stops.py")],
+            capture_output=True, text=True, timeout=30,
+        )
+        if r.returncode != 0:
+            print("dynamic_stops.py warning: " + r.stderr[:200])
+    except Exception as exc:
+        print("dynamic_stops.py error: " + str(exc))
+
     # Best-effort: push priority change to Telegram. Never fail the pipeline.
     try:
         subprocess.run(

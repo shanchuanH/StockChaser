@@ -14,23 +14,7 @@
     "_imported": "from Fidelity 2026-05-11",
     "strategy": "anti_martingale",
     "stop_loss_pct": -0.08,
-    "profit_ladder": [
-      {
-        "trigger_pct": 0.1,
-        "sell_pct_of_peak": 0.25,
-        "name": "tier_1"
-      },
-      {
-        "trigger_pct": 0.2,
-        "sell_pct_of_peak": 0.25,
-        "name": "tier_2"
-      },
-      {
-        "trigger_pct": 0.3,
-        "sell_pct_of_peak": 0.33,
-        "name": "tier_3"
-      }
-    ],
+    "profit_ladder": null,
     "entry_ladder": [
       {
         "trigger": "initial",
@@ -45,7 +29,9 @@
         "name": "step_3"
       }
     ],
-    "dip_ladder": null
+    "dip_ladder": null,
+    "high_conviction": true,
+    "current_stop_price": 165.66
   },
   "AMZN": {
     "ticker": "AMZN",
@@ -128,7 +114,8 @@
         "name": "step_3"
       }
     ],
-    "dip_ladder": null
+    "dip_ladder": null,
+    "current_stop_price": 194.26
   },
   "GOOGL": {
     "ticker": "GOOGL",
@@ -211,7 +198,8 @@
         "name": "step_3"
       }
     ],
-    "dip_ladder": null
+    "dip_ladder": null,
+    "current_stop_price": 17.98
   },
   "LSCC": {
     "ticker": "LSCC",
@@ -259,7 +247,8 @@
         "name": "step_3"
       }
     ],
-    "dip_ladder": null
+    "dip_ladder": null,
+    "current_stop_price": 117.01
   },
   "MSFT": {
     "ticker": "MSFT",
@@ -348,7 +337,8 @@
         "name": "step_3"
       }
     ],
-    "dip_ladder": null
+    "dip_ladder": null,
+    "current_stop_price": 203.32
   },
   "VRT": {
     "ticker": "VRT",
@@ -396,7 +386,8 @@
         "name": "step_3"
       }
     ],
-    "dip_ladder": null
+    "dip_ladder": null,
+    "current_stop_price": 316.95
   },
   "DRAM": {
     "ticker": "DRAM",
