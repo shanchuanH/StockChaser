@@ -39,13 +39,19 @@ def fetch(days_back: int = 1100):
     universe = json.loads(UNIVERSE.read_text(encoding="utf-8"))
     # v3.7: also fetch ETF / external positions from my_holdings.json
     # so the portfolio view shows real P&L for buy-and-hold ETFs / HIMX.
+    # v3.8: ALSO add every held ticker (including universe-AI-chain ones) to
+    # extra_tickers, so newly-listed ETFs like DRAM (Apr 2024) with <30 bars
+    # of history — which engine_v35 silently drops — still get a current
+    # price in `extra_prices` for the portfolio card display.
     extra_tickers = set()
+    all_held_tickers = set()
     holdings_path = ROOT / "data" / "my_holdings.json"
     if holdings_path.exists():
         try:
             holdings = json.loads(holdings_path.read_text(encoding="utf-8"))
             universe_tickers_set = {u["ticker"] for u in universe}
             for tk, hh in holdings.items():
+                all_held_tickers.add(tk)
                 if hh.get("category") in ("etf", "external") and tk not in universe_tickers_set:
                     extra_tickers.add(tk)
         except Exception:
@@ -142,6 +148,25 @@ def fetch(days_back: int = 1100):
             print(f"  ! {t}: no data")
             continue
         if len(sub) < 30:
+            # Not enough history for full Conviction calc (typical for
+            # newly-listed ETFs like DRAM, Apr 2024). But if user holds
+            # this ticker, still expose a current price via extra_prices
+            # so the portfolio card doesn't show stale +0.00%.
+            if t in all_held_tickers and len(sub) >= 1:
+                close_e = sub["Close"]
+                last_e = float(close_e.iloc[-1])
+                wk_e = round(float((close_e.iloc[-1] / close_e.iloc[-5] - 1) * 100), 2) if len(close_e) >= 5 else None
+                mo_e = round(float((close_e.iloc[-1] / close_e.iloc[-21] - 1) * 100), 2) if len(close_e) >= 21 else None
+                out["extra_prices"][t] = {
+                    "latest_price": round(last_e, 2),
+                    "latest_date": str(close_e.index[-1].date()),
+                    "week_return_pct": wk_e,
+                    "month_return_pct": mo_e,
+                    "_note": f"only {len(sub)} bars — engine 跳过, 仅展示价",
+                }
+                print(f"  ⚠️ {t}: {len(sub)} bars (<30) → extra_prices only")
+            else:
+                print(f"  ! {t}: only {len(sub)} bars, skipped")
             continue
         close = sub["Close"]; high = sub["High"]; low = sub["Low"]; vol = sub["Volume"]
         last = float(close.iloc[-1])
