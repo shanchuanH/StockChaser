@@ -79,6 +79,7 @@ tr.detail td{background:#0d1218;padding:14px 20px;border-bottom:2px solid var(--
     <div>SPY 4w: <span id="spy">-</span> &nbsp;<button class="refresh-btn" id="refresh-btn">刷新</button></div>
   </div>
 </header>
+<div id="advisory-banner" style="display:none;background:rgba(63,185,80,.12);border-bottom:1px solid #3fb950;color:#3fb950;text-align:center;padding:6px 12px;font-size:12px;font-weight:600"></div>
 <div id="mock-banner" class="mock-banner" style="display:none">⚠️ MOCK 数据。生产用 <code>python serve.py</code></div>
 <div id="crash-banner" style="display:none;background:linear-gradient(90deg,#d63031,#ff6b6b);color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:700;border-bottom:2px solid #ff4757"></div>
 <div id="stale-banner" style="display:none;background:#f39c12;color:#000;text-align:center;padding:6px;font-size:12px;font-weight:700"></div>
@@ -202,7 +203,7 @@ async function loadData(){
     updateCrashBanner();
     updateStaleBanner();
     loadPendingAlerts();
-    updateCounts();render();
+    loadEntryAdvisory();updateCounts();render();
   }catch(e){
     document.getElementById("last-updated").textContent="连接失败，5s后重试…";
     _scheduleRetry();
@@ -339,6 +340,41 @@ function updateCrashBanner(){
     banner.style.display = "block";
   }
 }
+
+
+// __PATCH_ENTRY_ADVISORY_JS__
+let _entryAdvisory = {};
+async function loadEntryAdvisory(){
+  try{
+    const r = await fetch("/api/entry_advisory");
+    if(r.ok){ _entryAdvisory = await r.json(); }
+  }catch(e){ _entryAdvisory = {}; }
+  renderAdvisoryBanner();
+}
+function renderAdvisoryBanner(){
+  const banner = document.getElementById("advisory-banner");
+  if(!banner) return;
+  const items = [];
+  for(const t in _entryAdvisory){
+    const a = _entryAdvisory[t];
+    for(const s of (a.suggestions||[])){
+      if(s.status === "late_ok"){
+        items.push(`📥 <strong>${t}</strong> ${s.step} 仍可入场 @ $${s.current_price.toFixed(2)}`);
+      } else if(s.status === "late_marginal"){
+        items.push(`⚠️ <strong>${t}</strong> ${s.step} 滑点偏大`);
+      } else if(s.status === "expired"){
+        items.push(`🚫 <strong>${t}</strong> ${s.step} 已过期, 建议跳过`);
+      }
+    }
+  }
+  if(items.length === 0){ banner.style.display = "none"; return; }
+  banner.innerHTML = "📥 入场 ladder 提示: " + items.join(" · ");
+  banner.style.display = "block";
+}
+function entryAdvisoryFor(ticker){
+  return _entryAdvisory[ticker] || null;
+}
+
 
 function updateCounts(){
   if(!data)return;

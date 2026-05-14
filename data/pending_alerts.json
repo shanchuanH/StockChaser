@@ -4,7 +4,7 @@
       "id": "QCOM-2026-05-13-flash_8",
       "ticker": "QCOM",
       "type": "flash_8",
-      "triggered_at": "2026-05-13T06:04:58Z",
+      "triggered_at": "2026-05-13T18:53:46Z",
       "trigger_price": 210.31,
       "trigger_metric": "单日 -11.46%",
       "action_label": "减至 30%（卖 70%）",

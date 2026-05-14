@@ -1,0 +1,134 @@
+{
+  "AAOI": {
+    "ticker": "AAOI",
+    "step1_price": 180.06,
+    "current_price": 188.28,
+    "ret_from_step1_pct": 4.57,
+    "suggestions": [
+      {
+        "step": "step_2",
+        "status": "late_ok",
+        "trigger_price": 185.46,
+        "current_price": 188.28,
+        "msg": "⏰ step_2 迟到, 现价 $188.28 > 触发 $185.46 (滑点 1.5%), 还可入场"
+      },
+      {
+        "step": "step_3",
+        "status": "not_yet",
+        "trigger_price": 190.86,
+        "current_price": 188.28,
+        "msg": "等触发 $190.86 (距+1.4%)"
+      }
+    ]
+  },
+  "ARM": {
+    "ticker": "ARM",
+    "step1_price": 211.15,
+    "current_price": 207.92,
+    "ret_from_step1_pct": -1.53,
+    "suggestions": [
+      {
+        "step": "step_2",
+        "status": "not_yet",
+        "trigger_price": 217.48,
+        "current_price": 207.92,
+        "msg": "等触发 $217.48 (距+4.6%)"
+      },
+      {
+        "step": "step_3",
+        "status": "not_yet",
+        "trigger_price": 223.82,
+        "current_price": 207.92,
+        "msg": "等触发 $223.82 (距+7.6%)"
+      }
+    ]
+  },
+  "HIMX": {
+    "ticker": "HIMX",
+    "step1_price": 19.54,
+    "current_price": 19.11,
+    "ret_from_step1_pct": -2.2,
+    "suggestions": [
+      {
+        "step": "step_2",
+        "status": "not_yet",
+        "trigger_price": 20.13,
+        "current_price": 19.11,
+        "msg": "等触发 $20.13 (距+5.3%)"
+      },
+      {
+        "step": "step_3",
+        "status": "not_yet",
+        "trigger_price": 20.71,
+        "current_price": 19.11,
+        "msg": "等触发 $20.71 (距+8.4%)"
+      }
+    ]
+  },
+  "LSCC": {
+    "ticker": "LSCC",
+    "step1_price": 127.19,
+    "current_price": 125.43,
+    "ret_from_step1_pct": -1.38,
+    "suggestions": [
+      {
+        "step": "step_2",
+        "status": "not_yet",
+        "trigger_price": 131.01,
+        "current_price": 125.43,
+        "msg": "等触发 $131.01 (距+4.4%)"
+      },
+      {
+        "step": "step_3",
+        "status": "not_yet",
+        "trigger_price": 134.82,
+        "current_price": 125.43,
+        "msg": "等触发 $134.82 (距+7.5%)"
+      }
+    ]
+  },
+  "QCOM": {
+    "ticker": "QCOM",
+    "step1_price": 221.0,
+    "current_price": 210.31,
+    "ret_from_step1_pct": -4.84,
+    "suggestions": [
+      {
+        "step": "step_2",
+        "status": "not_yet",
+        "trigger_price": 227.63,
+        "current_price": 210.31,
+        "msg": "等触发 $227.63 (距+8.2%)"
+      },
+      {
+        "step": "step_3",
+        "status": "not_yet",
+        "trigger_price": 234.26,
+        "current_price": 210.31,
+        "msg": "等触发 $234.26 (距+11.4%)"
+      }
+    ]
+  },
+  "VRT": {
+    "ticker": "VRT",
+    "step1_price": 344.51,
+    "current_price": 367.13,
+    "ret_from_step1_pct": 6.57,
+    "suggestions": [
+      {
+        "step": "step_2",
+        "status": "late_marginal",
+        "trigger_price": 354.85,
+        "current_price": 367.13,
+        "msg": "⚠️ step_2 滑点已大 (现 $367.13 高过触发 3.5%), 慎入或跳过"
+      },
+      {
+        "step": "step_3",
+        "status": "late_ok",
+        "trigger_price": 365.18,
+        "current_price": 367.13,
+        "msg": "⏰ step_3 迟到, 现价 $367.13 > 触发 $365.18 (滑点 0.5%), 还可入场"
+      }
+    ]
+  }
+}

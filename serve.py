@@ -242,6 +242,17 @@ def run_pipeline(use_mock=False):
     except Exception as exc:
         print("dynamic_stops.py error: " + str(exc))
 
+    # __PATCH_RUN_ADVISOR__
+    try:
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "missed_entry_advisor.py")],
+            capture_output=True, text=True, timeout=30,
+        )
+        if r.returncode != 0:
+            print("missed_entry_advisor.py warning: " + r.stderr[:200])
+    except Exception as exc:
+        print("missed_entry_advisor.py error: " + str(exc))
+
     # Best-effort: push priority change to Telegram. Never fail the pipeline.
     try:
         subprocess.run(
@@ -832,6 +843,17 @@ def api_universe_post():
 # All helper functions are now defined; safe to register the webhook.
 if _IS_RENDER:
     _register_telegram_webhook()
+
+
+
+
+# __PATCH_ENTRY_ADVISORY_ROUTE__
+@app.route("/api/entry_advisory", methods=["GET"])
+def api_entry_advisory():
+    fp = DATA / "entry_advisory.json"
+    if not fp.exists():
+        return jsonify({})
+    return Response(fp.read_text(encoding="utf-8"), mimetype="application/json")
 
 
 def main():

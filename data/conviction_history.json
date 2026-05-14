@@ -4,12 +4,22 @@
       "date": "2026-05-12",
       "conv": 97.6,
       "action": "STRONG_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 92.5,
+      "action": "BUY"
     }
   ],
   "VRT": [
     {
       "date": "2026-05-12",
       "conv": 95.3,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 92.7,
       "action": "BUY"
     }
   ],
@@ -18,6 +28,11 @@
       "date": "2026-05-12",
       "conv": 87.0,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 82.4,
+      "action": "BUY"
     }
   ],
   "DELL": [
@@ -25,12 +40,22 @@
       "date": "2026-05-12",
       "conv": 86.5,
       "action": "STRONG_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 81.6,
+      "action": "BUY"
     }
   ],
   "APLD": [
     {
       "date": "2026-05-12",
       "conv": 85.4,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 81.6,
       "action": "BUY"
     }
   ],
@@ -39,6 +64,11 @@
       "date": "2026-05-12",
       "conv": 85.3,
       "action": "STRONG_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 85.5,
+      "action": "STRONG_BUY"
     }
   ],
   "AAOI": [
@@ -46,11 +76,21 @@
       "date": "2026-05-12",
       "conv": 84.5,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 92.0,
+      "action": "BUY"
     }
   ],
   "GOOGL": [
     {
       "date": "2026-05-12",
+      "conv": 83.9,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 83.9,
       "action": "BUY"
     }
@@ -60,12 +100,22 @@
       "date": "2026-05-12",
       "conv": 83.5,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 75.8,
+      "action": "BUY"
     }
   ],
   "PWR": [
     {
       "date": "2026-05-12",
       "conv": 83.3,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 83.1,
       "action": "BUY"
     }
   ],
@@ -74,12 +124,22 @@
       "date": "2026-05-12",
       "conv": 83.0,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 79.9,
+      "action": "BUY"
     }
   ],
   "CRDO": [
     {
       "date": "2026-05-12",
       "conv": 82.9,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 85.3,
       "action": "BUY"
     }
   ],
@@ -88,12 +148,22 @@
       "date": "2026-05-12",
       "conv": 82.6,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 82.8,
+      "action": "BUY"
     }
   ],
   "EME": [
     {
       "date": "2026-05-12",
       "conv": 82.3,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 81.9,
       "action": "BUY"
     }
   ],
@@ -102,12 +172,22 @@
       "date": "2026-05-12",
       "conv": 82.1,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 83.6,
+      "action": "BUY"
     }
   ],
   "MKSI": [
     {
       "date": "2026-05-12",
       "conv": 82.1,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 79.9,
       "action": "BUY"
     }
   ],
@@ -116,12 +196,22 @@
       "date": "2026-05-12",
       "conv": 82.0,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 86.4,
+      "action": "BUY"
     }
   ],
   "NVT": [
     {
       "date": "2026-05-12",
       "conv": 81.2,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 79.6,
       "action": "BUY"
     }
   ],
@@ -130,12 +220,22 @@
       "date": "2026-05-12",
       "conv": 80.8,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 82.9,
+      "action": "BUY"
     }
   ],
   "SNPS": [
     {
       "date": "2026-05-12",
       "conv": 80.5,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 81.6,
       "action": "BUY"
     }
   ],
@@ -144,6 +244,11 @@
       "date": "2026-05-12",
       "conv": 80.5,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 81.7,
+      "action": "BUY"
     }
   ],
   "MRVL": [
@@ -151,11 +256,21 @@
       "date": "2026-05-12",
       "conv": 80.3,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 87.3,
+      "action": "BUY"
     }
   ],
   "CDNS": [
     {
       "date": "2026-05-12",
+      "conv": 80.1,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 80.1,
       "action": "BUY"
     }
@@ -165,12 +280,22 @@
       "date": "2026-05-12",
       "conv": 80.1,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 80.1,
+      "action": "BUY"
     }
   ],
   "BE": [
     {
       "date": "2026-05-12",
       "conv": 79.9,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 81.1,
       "action": "BUY"
     }
   ],
@@ -179,6 +304,11 @@
       "date": "2026-05-12",
       "conv": 79.6,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 79.8,
+      "action": "BUY"
     }
   ],
   "AMAT": [
@@ -186,12 +316,22 @@
       "date": "2026-05-12",
       "conv": 79.2,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 90.9,
+      "action": "STRONG_BUY"
     }
   ],
   "ROK": [
     {
       "date": "2026-05-12",
       "conv": 79.0,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 81.6,
       "action": "BUY"
     }
   ],
@@ -200,12 +340,22 @@
       "date": "2026-05-12",
       "conv": 78.9,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 87.6,
+      "action": "STRONG_BUY"
     }
   ],
   "TTMI": [
     {
       "date": "2026-05-12",
       "conv": 78.9,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 83.5,
       "action": "BUY"
     }
   ],
@@ -214,12 +364,22 @@
       "date": "2026-05-12",
       "conv": 78.9,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 82.7,
+      "action": "BUY"
     }
   ],
   "CIEN": [
     {
       "date": "2026-05-12",
       "conv": 78.6,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 81.5,
       "action": "BUY"
     }
   ],
@@ -228,12 +388,22 @@
       "date": "2026-05-12",
       "conv": 78.4,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 85.0,
+      "action": "BUY"
     }
   ],
   "NBIS": [
     {
       "date": "2026-05-12",
       "conv": 78.1,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 82.1,
       "action": "BUY"
     }
   ],
@@ -242,12 +412,22 @@
       "date": "2026-05-12",
       "conv": 77.8,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 83.9,
+      "action": "BUY"
     }
   ],
   "WDC": [
     {
       "date": "2026-05-12",
       "conv": 77.6,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 83.5,
       "action": "BUY"
     }
   ],
@@ -256,12 +436,22 @@
       "date": "2026-05-12",
       "conv": 77.6,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 84.4,
+      "action": "BUY"
     }
   ],
   "LNVGY": [
     {
       "date": "2026-05-12",
       "conv": 77.6,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 81.4,
       "action": "BUY"
     }
   ],
@@ -270,12 +460,22 @@
       "date": "2026-05-12",
       "conv": 77.2,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 78.7,
+      "action": "BUY"
     }
   ],
   "MTRN": [
     {
       "date": "2026-05-12",
       "conv": 77.2,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 83.5,
       "action": "BUY"
     }
   ],
@@ -284,12 +484,22 @@
       "date": "2026-05-12",
       "conv": 76.5,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 71.9,
+      "action": "TRY_BUY"
     }
   ],
   "ORCL": [
     {
       "date": "2026-05-12",
       "conv": 75.7,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 83.5,
       "action": "BUY"
     }
   ],
@@ -298,11 +508,21 @@
       "date": "2026-05-12",
       "conv": 75.6,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 84.2,
+      "action": "BUY"
     }
   ],
   "NEE": [
     {
       "date": "2026-05-12",
+      "conv": 75.4,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 75.4,
       "action": "BUY"
     }
@@ -312,12 +532,22 @@
       "date": "2026-05-12",
       "conv": 75.2,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 84.5,
+      "action": "BUY"
     }
   ],
   "UEC": [
     {
       "date": "2026-05-12",
       "conv": 75.1,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 78.9,
       "action": "BUY"
     }
   ],
@@ -326,6 +556,11 @@
       "date": "2026-05-12",
       "conv": 75.1,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 77.8,
+      "action": "BUY"
     }
   ],
   "ARM": [
@@ -333,11 +568,21 @@
       "date": "2026-05-12",
       "conv": 75.0,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 76.3,
+      "action": "BUY"
     }
   ],
   "POET": [
     {
       "date": "2026-05-12",
+      "conv": 75.0,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 75.0,
       "action": "BUY"
     }
@@ -347,12 +592,22 @@
       "date": "2026-05-12",
       "conv": 73.9,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 79.2,
+      "action": "BUY"
     }
   ],
   "AMZN": [
     {
       "date": "2026-05-12",
       "conv": 73.9,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 77.9,
       "action": "BUY"
     }
   ],
@@ -361,12 +616,22 @@
       "date": "2026-05-12",
       "conv": 73.2,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 76.4,
+      "action": "BUY"
     }
   ],
   "AEHR": [
     {
       "date": "2026-05-12",
       "conv": 72.6,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 77.8,
       "action": "BUY"
     }
   ],
@@ -375,12 +640,22 @@
       "date": "2026-05-12",
       "conv": 72.5,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 72.1,
+      "action": "BUY"
     }
   ],
   "BEP": [
     {
       "date": "2026-05-12",
       "conv": 72.3,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 72.4,
       "action": "BUY"
     }
   ],
@@ -389,6 +664,11 @@
       "date": "2026-05-12",
       "conv": 72.1,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 72.8,
+      "action": "BUY"
     }
   ],
   "SMTC": [
@@ -396,12 +676,22 @@
       "date": "2026-05-12",
       "conv": 72.1,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 69.0,
+      "action": "TRY_BUY"
     }
   ],
   "HUT": [
     {
       "date": "2026-05-12",
       "conv": 72.1,
+      "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 75.7,
       "action": "BUY"
     }
   ],
@@ -410,12 +700,22 @@
       "date": "2026-05-12",
       "conv": 72.1,
       "action": "BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 76.5,
+      "action": "BUY"
     }
   ],
   "SMCI": [
     {
       "date": "2026-05-12",
       "conv": 71.9,
+      "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 69.2,
       "action": "TRY_BUY"
     }
   ],
@@ -424,6 +724,11 @@
       "date": "2026-05-12",
       "conv": 70.9,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 80.5,
+      "action": "BUY"
     }
   ],
   "ASML": [
@@ -431,6 +736,11 @@
       "date": "2026-05-12",
       "conv": 70.7,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 87.3,
+      "action": "BUY"
     }
   ],
   "RMBS": [
@@ -438,11 +748,21 @@
       "date": "2026-05-12",
       "conv": 69.9,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 74.4,
+      "action": "BUY"
     }
   ],
   "FLNC": [
     {
       "date": "2026-05-12",
+      "conv": 69.9,
+      "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 69.9,
       "action": "TRY_BUY"
     }
@@ -452,6 +772,11 @@
       "date": "2026-05-12",
       "conv": 69.8,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 65.1,
+      "action": "TRY_BUY"
     }
   ],
   "ACMR": [
@@ -459,6 +784,11 @@
       "date": "2026-05-12",
       "conv": 69.6,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 73.8,
+      "action": "BUY"
     }
   ],
   "TSM": [
@@ -466,6 +796,11 @@
       "date": "2026-05-12",
       "conv": 69.4,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 78.7,
+      "action": "BUY"
     }
   ],
   "ENPH": [
@@ -473,6 +808,11 @@
       "date": "2026-05-12",
       "conv": 69.4,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 78.1,
+      "action": "BUY"
     }
   ],
   "PLUG": [
@@ -480,12 +820,22 @@
       "date": "2026-05-12",
       "conv": 68.9,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 72.9,
+      "action": "BUY"
     }
   ],
   "LASR": [
     {
       "date": "2026-05-12",
       "conv": 68.7,
+      "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 69.3,
       "action": "TRY_BUY"
     }
   ],
@@ -494,12 +844,22 @@
       "date": "2026-05-12",
       "conv": 68.0,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 71.5,
+      "action": "TRY_BUY"
     }
   ],
   "TLN": [
     {
       "date": "2026-05-12",
       "conv": 67.6,
+      "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 71.8,
       "action": "TRY_BUY"
     }
   ],
@@ -508,11 +868,21 @@
       "date": "2026-05-12",
       "conv": 66.3,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 84.3,
+      "action": "BUY"
     }
   ],
   "DLR": [
     {
       "date": "2026-05-12",
+      "conv": 66.2,
+      "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 66.2,
       "action": "TRY_BUY"
     }
@@ -522,12 +892,22 @@
       "date": "2026-05-12",
       "conv": 65.7,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 72.1,
+      "action": "BUY"
     }
   ],
   "NNE": [
     {
       "date": "2026-05-12",
       "conv": 65.6,
+      "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 70.3,
       "action": "TRY_BUY"
     }
   ],
@@ -536,11 +916,21 @@
       "date": "2026-05-12",
       "conv": 63.9,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 61.6,
+      "action": "TRY_BUY"
     }
   ],
   "IDA": [
     {
       "date": "2026-05-12",
+      "conv": 63.8,
+      "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 63.8,
       "action": "TRY_BUY"
     }
@@ -550,12 +940,22 @@
       "date": "2026-05-12",
       "conv": 61.9,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 65.1,
+      "action": "TRY_BUY"
     }
   ],
   "ONTO": [
     {
       "date": "2026-05-12",
       "conv": 61.8,
+      "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 64.5,
       "action": "TRY_BUY"
     }
   ],
@@ -564,12 +964,22 @@
       "date": "2026-05-12",
       "conv": 59.5,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 70.7,
+      "action": "TRY_BUY"
     }
   ],
   "WULF": [
     {
       "date": "2026-05-12",
       "conv": 58.9,
+      "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 71.7,
       "action": "TRY_BUY"
     }
   ],
@@ -578,11 +988,21 @@
       "date": "2026-05-12",
       "conv": 58.6,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 62.6,
+      "action": "TRY_BUY"
     }
   ],
   "MSFT": [
     {
       "date": "2026-05-12",
+      "conv": 58.3,
+      "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 58.3,
       "action": "TRY_BUY"
     }
@@ -592,6 +1012,11 @@
       "date": "2026-05-12",
       "conv": 58.3,
       "action": "TRY_BUY"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 65.3,
+      "action": "TRY_BUY"
     }
   ],
   "ENTG": [
@@ -599,6 +1024,11 @@
       "date": "2026-05-12",
       "conv": 57.9,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 61.8,
+      "action": "TRY_BUY"
     }
   ],
   "D": [
@@ -606,6 +1036,11 @@
       "date": "2026-05-12",
       "conv": 57.5,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 61.1,
+      "action": "TRY_BUY"
     }
   ],
   "DNN": [
@@ -613,6 +1048,11 @@
       "date": "2026-05-12",
       "conv": 56.3,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 61.2,
+      "action": "TRY_BUY"
     }
   ],
   "AEP": [
@@ -620,11 +1060,21 @@
       "date": "2026-05-12",
       "conv": 56.3,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 59.8,
+      "action": "TRY_BUY"
     }
   ],
   "VST": [
     {
       "date": "2026-05-12",
+      "conv": 55.1,
+      "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 55.1,
       "action": "WATCH"
     }
@@ -634,11 +1084,21 @@
       "date": "2026-05-12",
       "conv": 54.9,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 54.9,
+      "action": "WATCH"
     }
   ],
   "SO": [
     {
       "date": "2026-05-12",
+      "conv": 54.9,
+      "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 54.9,
       "action": "WATCH"
     }
@@ -648,6 +1108,11 @@
       "date": "2026-05-12",
       "conv": 54.0,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 55.3,
+      "action": "WATCH"
     }
   ],
   "CIFR": [
@@ -655,6 +1120,11 @@
       "date": "2026-05-12",
       "conv": 53.9,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 59.6,
+      "action": "TRY_BUY"
     }
   ],
   "CRWV": [
@@ -662,11 +1132,21 @@
       "date": "2026-05-12",
       "conv": 53.4,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 56.0,
+      "action": "WATCH"
     }
   ],
   "META": [
     {
       "date": "2026-05-12",
+      "conv": 52.1,
+      "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 52.1,
       "action": "WATCH"
     }
@@ -676,11 +1156,21 @@
       "date": "2026-05-12",
       "conv": 52.0,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 56.0,
+      "action": "WATCH"
     }
   ],
   "AYI": [
     {
       "date": "2026-05-12",
+      "conv": 51.6,
+      "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 51.6,
       "action": "WATCH"
     }
@@ -690,6 +1180,11 @@
       "date": "2026-05-12",
       "conv": 50.6,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 56.8,
+      "action": "WATCH"
     }
   ],
   "FN": [
@@ -697,6 +1192,11 @@
       "date": "2026-05-12",
       "conv": 50.5,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 60.7,
+      "action": "TRY_BUY"
     }
   ],
   "BWXT": [
@@ -704,12 +1204,22 @@
       "date": "2026-05-12",
       "conv": 50.1,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 59.7,
+      "action": "TRY_BUY"
     }
   ],
   "EXC": [
     {
       "date": "2026-05-12",
       "conv": 48.4,
+      "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 51.0,
       "action": "WATCH"
     }
   ],
@@ -718,6 +1228,11 @@
       "date": "2026-05-12",
       "conv": 48.1,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 52.0,
+      "action": "WATCH"
     }
   ],
   "CWEN": [
@@ -725,11 +1240,21 @@
       "date": "2026-05-12",
       "conv": 48.0,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 54.6,
+      "action": "WATCH"
     }
   ],
   "ANET": [
     {
       "date": "2026-05-12",
+      "conv": 47.9,
+      "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 47.9,
       "action": "WATCH"
     }
@@ -739,11 +1264,21 @@
       "date": "2026-05-12",
       "conv": 47.7,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 47.7,
+      "action": "WATCH"
     }
   ],
   "HE": [
     {
       "date": "2026-05-12",
+      "conv": 47.7,
+      "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 47.7,
       "action": "WATCH"
     }
@@ -753,11 +1288,21 @@
       "date": "2026-05-12",
       "conv": 46.9,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 46.9,
+      "action": "WATCH"
     }
   ],
   "HUBB": [
     {
       "date": "2026-05-12",
+      "conv": 46.5,
+      "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
       "conv": 46.5,
       "action": "WATCH"
     }
@@ -767,6 +1312,11 @@
       "date": "2026-05-12",
       "conv": 43.6,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 39.6,
+      "action": "AVOID"
     }
   ],
   "IPGP": [
@@ -774,6 +1324,11 @@
       "date": "2026-05-12",
       "conv": 43.0,
       "action": "WATCH"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 38.4,
+      "action": "AVOID"
     }
   ],
   "NRG": [
@@ -781,6 +1336,18 @@
       "date": "2026-05-12",
       "conv": 35.6,
       "action": "AVOID"
+    },
+    {
+      "date": "2026-05-13",
+      "conv": 35.6,
+      "action": "AVOID"
+    }
+  ],
+  "HIMX": [
+    {
+      "date": "2026-05-13",
+      "conv": 68.4,
+      "action": "TRY_BUY"
     }
   ]
 }
