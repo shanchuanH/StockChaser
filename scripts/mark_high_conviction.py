@@ -34,16 +34,21 @@ def main():
         now = ticker in HIGH_CONVICTION
         h["high_conviction"] = now
         if now:
-            # high_conviction: no profit-take, no entry_ladder, dip-buy on weakness, keep stop
+            # high_conviction = standard anti-martingale MINUS the profit ladder.
+            # Anti-martingale invariant: ONE hard stop, NEVER buy dips.
+            #   - stop_loss_pct stays -0.08 (the single stop)
+            #   - entry_ladder kept (+3%/+6% pyramid-in on strength — consistent)
+            #   - dip_ladder stays None (buying dips = martingale, contradicts anti-mart)
+            #   - profit_ladder removed → ride the winner, no forced selling
             h["profit_ladder"] = None
-            h["entry_ladder"] = None
-            h["dip_ladder"] = [
-                {"trigger_pct": -0.05, "buy_pct_of_initial": 0.30, "name": "dip_1"},
-                {"trigger_pct": -0.10, "buy_pct_of_initial": 0.50, "name": "dip_2"},
-                {"trigger_pct": -0.15, "buy_pct_of_initial": 1.00, "name": "dip_3"},
+            h["entry_ladder"] = [
+                {"trigger": "initial", "name": "step_1"},
+                {"trigger_pct": 0.03, "name": "step_2"},
+                {"trigger_pct": 0.06, "name": "step_3"},
             ]
+            h["dip_ladder"] = None
             if was != now:
-                changes.append(f"  + {ticker}: high_conviction ON")
+                changes.append(f"  + {ticker}: high_conviction ON (anti-mart − profit_ladder, 单一 -8% 止损)")
         else:
             if h.get("strategy") == "anti_martingale":
                 # Standard anti-martingale ladder
@@ -71,14 +76,4 @@ def main():
     else:
         print("No changes (all already correctly tagged)")
 
-    print(f"\nHigh-conviction roster ({len(HIGH_CONVICTION)}):")
-    for t in sorted(HIGH_CONVICTION):
-        h = pf.get(t)
-        if h:
-            print(f"  {t}: held {h['shares']} 股 @ ${h['buy_price']}, stop ${h['buy_price']*0.92:.2f}")
-        else:
-            print(f"  {t}: (not in holdings)")
-
-
-if __name__ == "__main__":
-    main()
+    p

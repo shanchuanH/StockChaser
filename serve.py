@@ -849,6 +849,9 @@ if _IS_RENDER:
 
 # __PATCH_ENTRY_ADVISORY_ROUTE__
 @app.route("/api/entry_advisory", methods=["GET"])
+
+
+@app.route("/api/entry_advisory", methods=["GET"])
 def api_entry_advisory():
     fp = DATA / "entry_advisory.json"
     if not fp.exists():

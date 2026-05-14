@@ -15,24 +15,21 @@
     "strategy": "anti_martingale",
     "stop_loss_pct": -0.08,
     "profit_ladder": null,
-    "entry_ladder": null,
-    "dip_ladder": [
+    "entry_ladder": [
       {
-        "trigger_pct": -0.05,
-        "buy_pct_of_initial": 0.3,
-        "name": "dip_1"
+        "trigger": "initial",
+        "name": "step_1"
       },
       {
-        "trigger_pct": -0.1,
-        "buy_pct_of_initial": 0.5,
-        "name": "dip_2"
+        "trigger_pct": 0.03,
+        "name": "step_2"
       },
       {
-        "trigger_pct": -0.15,
-        "buy_pct_of_initial": 1.0,
-        "name": "dip_3"
+        "trigger_pct": 0.06,
+        "name": "step_3"
       }
     ],
+    "dip_ladder": null,
     "high_conviction": true,
     "current_stop_price": 165.66
   },
