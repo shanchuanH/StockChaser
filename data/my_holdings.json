@@ -15,21 +15,24 @@
     "strategy": "anti_martingale",
     "stop_loss_pct": -0.08,
     "profit_ladder": null,
-    "entry_ladder": [
+    "entry_ladder": null,
+    "dip_ladder": [
       {
-        "trigger": "initial",
-        "name": "step_1"
+        "trigger_pct": -0.05,
+        "buy_pct_of_initial": 0.3,
+        "name": "dip_1"
       },
       {
-        "trigger_pct": 0.03,
-        "name": "step_2"
+        "trigger_pct": -0.1,
+        "buy_pct_of_initial": 0.5,
+        "name": "dip_2"
       },
       {
-        "trigger_pct": 0.06,
-        "name": "step_3"
+        "trigger_pct": -0.15,
+        "buy_pct_of_initial": 1.0,
+        "name": "dip_3"
       }
     ],
-    "dip_ladder": null,
     "high_conviction": true,
     "current_stop_price": 165.66
   },
@@ -66,7 +69,8 @@
         "buy_pct_of_initial": 1.0,
         "name": "dip_3"
       }
-    ]
+    ],
+    "high_conviction": false
   },
   "ARM": {
     "ticker": "ARM",
@@ -115,7 +119,8 @@
       }
     ],
     "dip_ladder": null,
-    "current_stop_price": 194.26
+    "current_stop_price": 194.26,
+    "high_conviction": false
   },
   "GOOGL": {
     "ticker": "GOOGL",
@@ -150,7 +155,8 @@
         "buy_pct_of_initial": 1.0,
         "name": "dip_3"
       }
-    ]
+    ],
+    "high_conviction": false
   },
   "HIMX": {
     "ticker": "HIMX",
@@ -199,7 +205,8 @@
       }
     ],
     "dip_ladder": null,
-    "current_stop_price": 17.98
+    "current_stop_price": 17.98,
+    "high_conviction": false
   },
   "LSCC": {
     "ticker": "LSCC",
@@ -248,7 +255,8 @@
       }
     ],
     "dip_ladder": null,
-    "current_stop_price": 117.01
+    "current_stop_price": 117.01,
+    "high_conviction": false
   },
   "MSFT": {
     "ticker": "MSFT",
@@ -283,7 +291,8 @@
         "buy_pct_of_initial": 1.0,
         "name": "dip_3"
       }
-    ]
+    ],
+    "high_conviction": false
   },
   "QCOM": {
     "ticker": "QCOM",
@@ -338,7 +347,8 @@
       }
     ],
     "dip_ladder": null,
-    "current_stop_price": 203.32
+    "current_stop_price": 203.32,
+    "high_conviction": false
   },
   "VRT": {
     "ticker": "VRT",
@@ -387,7 +397,8 @@
       }
     ],
     "dip_ladder": null,
-    "current_stop_price": 316.95
+    "current_stop_price": 316.95,
+    "high_conviction": false
   },
   "DRAM": {
     "ticker": "DRAM",
@@ -437,7 +448,8 @@
         "buy_pct_of_initial": 1.0,
         "name": "dip_3"
       }
-    ]
+    ],
+    "high_conviction": false
   },
   "QQQM": {
     "ticker": "QQQM",
@@ -474,7 +486,8 @@
         "buy_pct_of_initial": 1.0,
         "name": "dip_3"
       }
-    ]
+    ],
+    "high_conviction": false
   },
   "SCHD": {
     "ticker": "SCHD",
@@ -511,7 +524,8 @@
         "buy_pct_of_initial": 1.0,
         "name": "dip_3"
       }
-    ]
+    ],
+    "high_conviction": false
   },
   "VGT": {
     "ticker": "VGT",
@@ -548,7 +562,8 @@
         "buy_pct_of_initial": 1.0,
         "name": "dip_3"
       }
-    ]
+    ],
+    "high_conviction": false
   },
   "VOO": {
     "ticker": "VOO",
@@ -585,6 +600,7 @@
         "buy_pct_of_initial": 1.0,
         "name": "dip_3"
       }
-    ]
+    ],
+    "high_conviction": false
   }
 }
