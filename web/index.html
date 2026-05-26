@@ -1062,9 +1062,19 @@ function renderPortfolioView(){
         html+='<div style="text-align:right"><div class="num '+retCls+'" style="font-size:17px;font-weight:700">'+(c.ret>=0?"+":"")+c.ret.toFixed(2)+'%</div>';
         html+='<div style="font-size:10.5px;color:#8b949e">'+(c.val-c.cost>=0?"+":"")+'$'+(c.val-c.cost).toFixed(0)+'</div></div>';
         html+='</div>';
-        html+='<div style="background:#0d1218;border-radius:4px;padding:6px 10px;margin-bottom:8px;display:flex;justify-content:space-between;font-size:11px;color:#8b949e">';
-        html+='<span>买 $'+c.h.buy_price.toFixed(2)+' × '+c.h.shares.toLocaleString()+'</span>';
-        html+='<span>现 $'+c.px.toFixed(2)+'</span>';
+        // ETF: 突出 买入均价 + 当前价 两栏
+        html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">';
+        html+='<div style="background:#1a2a1e;border:1px solid #3fb950;border-radius:5px;padding:8px 6px;text-align:center">';
+        html+='<div style="font-size:9.5px;color:#3fb950;font-weight:600;margin-bottom:2px">📊 买入均价</div>';
+        html+='<div style="font-size:17px;font-weight:800;color:#3fb950;font-variant-numeric:tabular-nums">$'+c.h.buy_price.toFixed(2)+'</div>';
+        html+='<div style="font-size:9px;color:#8b949e;margin-top:2px">× '+c.h.shares.toLocaleString()+' = $'+c.cost.toFixed(0)+'</div>';
+        html+='</div>';
+        html+='<div style="background:#1a1f26;border:1px solid #58a6ff;border-radius:5px;padding:8px 6px;text-align:center">';
+        html+='<div style="font-size:9.5px;color:#8b949e;font-weight:600;margin-bottom:2px">📍 当前价</div>';
+        html+='<div style="font-size:17px;font-weight:800;color:#c9d1d9;font-variant-numeric:tabular-nums">$'+c.px.toFixed(2)+'</div>';
+        const etfDiff = ((c.px / c.h.buy_price - 1) * 100);
+        html+='<div class="num '+(etfDiff>=0?"up":"down")+'" style="font-size:9px;margin-top:2px">'+(etfDiff>=0?"+":"")+etfDiff.toFixed(2)+'%</div>';
+        html+='</div>';
         html+='</div>';
         html+='<div style="background:#8b949e22;border-radius:4px;padding:5px 10px;margin-bottom:8px;font-size:11px;color:#c9d1d9;text-align:center">'+hint+'</div>';
         html+='<div style="display:flex;gap:6px">';
@@ -1090,6 +1100,66 @@ function renderPortfolioView(){
         html+='<div style="background:'+c.verb_color+'22;border-radius:5px;padding:8px 12px;margin-bottom:8px">';
         html+='<div style="font-size:15px;font-weight:700;color:'+c.verb_color+'">'+c.action_text+'</div>';
         html+='<div style="font-size:11px;color:#c9d1d9;margin-top:3px">'+c.reason+'</div>';
+        html+='</div>';
+
+        // ====== 🎯 Fidelity 挂单速查 — 三栏大字号 ======
+        const buyP_top = c.h.buy_price;
+        const totShares_top = c.h.shares;
+        const stratL_top = c.h.strategy || "anti_martingale";
+        const curStop_top = c.h.current_stop_price || (buyP_top * 0.92);
+        const hwm_top = c.h.hwm_price || Math.max(c.px, buyP_top);
+        // 止损类型短标签 (用于卡内副标)
+        let stopTypeShort = "初始 -8%";
+        let trailNote = "";
+        if(stratL_top !== "martingale"){
+          if(c.ret >= 100){ stopTypeShort = "峰值 -20%"; trailNote = " · Trail $"+(hwm_top - curStop_top).toFixed(2); }
+          else if(c.ret >= 50){ stopTypeShort = "峰值 -15%"; trailNote = " · Trail $"+(hwm_top - curStop_top).toFixed(2); }
+          else if(c.ret >= 20){ stopTypeShort = "保本档"; trailNote = ""; }
+        }
+        const stopVsCost = ((curStop_top / buyP_top - 1) * 100);
+        const bufferPct = ((c.px - curStop_top) / c.px * 100);
+        html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">';
+        // 1) 止损价 (anti-mart) / 下一档加仓价 (martingale)
+        if(stratL_top === "martingale"){
+          // 找下一档没触发的加仓档
+          let nextAddPx = buyP_top * 0.95, nextAddNote = "-5% 小额加仓";
+          if(c.px <= buyP_top * 0.95 && c.px > buyP_top * 0.90){ nextAddPx = buyP_top * 0.90; nextAddNote = "-10% 中额加仓"; }
+          else if(c.px <= buyP_top * 0.90 && c.px > buyP_top * 0.85){ nextAddPx = buyP_top * 0.85; nextAddNote = "-15% 重额加仓"; }
+          else if(c.px <= buyP_top * 0.85){ nextAddPx = null; nextAddNote = "已到底档"; }
+          html+='<div style="background:#0e1f2e;border:1px solid #3a6ea5;border-radius:5px;padding:8px 6px;text-align:center">';
+          html+='<div style="font-size:9.5px;color:#9bd5ff;font-weight:600;margin-bottom:2px">💧 下一档加仓</div>';
+          html+='<div style="font-size:17px;font-weight:700;color:#9bd5ff;font-variant-numeric:tabular-nums">'+(nextAddPx?'$'+nextAddPx.toFixed(2):'—')+'</div>';
+          html+='<div style="font-size:9px;color:#8b949e;margin-top:2px">'+nextAddNote+'</div>';
+          html+='</div>';
+        } else {
+          const stopBorderColor = c.px <= curStop_top ? "#ff4757" : "#d63031";
+          const stopBgColor = c.px <= curStop_top ? "#3a1518" : "#2a1417";
+          html+='<div style="background:'+stopBgColor+';border:1px solid '+stopBorderColor+';border-radius:5px;padding:8px 6px;text-align:center" title="去 Fidelity 设 STOP 单用这个价格">';
+          html+='<div style="font-size:9.5px;color:#ff6b6b;font-weight:600;margin-bottom:2px">🛡 止损价 (Fidelity STOP)</div>';
+          html+='<div style="font-size:18px;font-weight:800;color:#ff6b6b;font-variant-numeric:tabular-nums;letter-spacing:-0.3px">$'+curStop_top.toFixed(2)+'</div>';
+          html+='<div style="font-size:9px;color:#8b949e;margin-top:2px">'+stopTypeShort+' ('+(stopVsCost>=0?'+':'')+stopVsCost.toFixed(1)+'%)'+trailNote+'</div>';
+          html+='</div>';
+        }
+        // 2) 买入均价
+        html+='<div style="background:#1a2a1e;border:1px solid #3fb950;border-radius:5px;padding:8px 6px;text-align:center">';
+        html+='<div style="font-size:9.5px;color:#3fb950;font-weight:600;margin-bottom:2px">📊 买入均价</div>';
+        html+='<div style="font-size:18px;font-weight:800;color:#3fb950;font-variant-numeric:tabular-nums;letter-spacing:-0.3px">$'+buyP_top.toFixed(2)+'</div>';
+        html+='<div style="font-size:9px;color:#8b949e;margin-top:2px">× '+totShares_top+' 股 = $'+c.cost.toFixed(0)+'</div>';
+        html+='</div>';
+        // 3) 当前价 + 距止损缓冲
+        const pxBorderColor = bufferPct < 2 && stratL_top !== "martingale" ? "#f39c12" : "#58a6ff";
+        html+='<div style="background:#1a1f26;border:1px solid '+pxBorderColor+';border-radius:5px;padding:8px 6px;text-align:center">';
+        html+='<div style="font-size:9.5px;color:#8b949e;font-weight:600;margin-bottom:2px">📍 当前价</div>';
+        html+='<div style="font-size:18px;font-weight:800;color:#c9d1d9;font-variant-numeric:tabular-nums;letter-spacing:-0.3px">$'+c.px.toFixed(2)+'</div>';
+        if(stratL_top !== "martingale"){
+          const bufferTxt = bufferPct >= 0 ? "距止损 "+bufferPct.toFixed(1)+"%" : "已破止损!";
+          const bufferColor = bufferPct < 0 ? "#ff4757" : (bufferPct < 2 ? "#f39c12" : "#8b949e");
+          html+='<div style="font-size:9px;color:'+bufferColor+';margin-top:2px;font-weight:'+(bufferPct<2?'700':'400')+'">'+bufferTxt+'</div>';
+        } else {
+          const dipPct = ((c.px / buyP_top - 1) * 100);
+          html+='<div style="font-size:9px;color:#8b949e;margin-top:2px">'+(dipPct>=0?'+':'')+dipPct.toFixed(1)+'% 距均价</div>';
+        }
+        html+='</div>';
         html+='</div>';
 
         // ====== 阶梯显示 — strategy-aware __PATCH_STRATEGY_LADDER__ ======
@@ -1130,8 +1200,8 @@ function renderPortfolioView(){
           html+='<span>'+mark(stage2_done)+'</span><span class="num" style="color:#3fb950">+50%</span><span>峰值 -15% 追踪 $'+(hwmPx*0.85).toFixed(2)+'</span><span style="color:#8b949e">骑趋势</span>';
           html+='<span>'+mark(stage3_done)+'</span><span class="num" style="color:#ffa500">+100%</span><span>峰值 -20% 追踪 $'+(hwmPx*0.80).toFixed(2)+'</span><span style="color:#8b949e">让赢家奔跑</span>';
           html+='</div>';
-          // 当前生效止损 — 高亮显示
-          html+='<div style="margin-top:6px;padding:5px 8px;background:#21262d;border-radius:4px;border-left:3px solid '+(c.px<=curStop?'#d63031':'#58a6ff')+';display:flex;justify-content:space-between;font-size:10.5px"><span style="color:#c9d1d9"><strong>当前止损:</strong> $'+curStop.toFixed(2)+'</span><span style="color:#8b949e">峰值 $'+hwmPx.toFixed(2)+' · 距止损 '+(((c.px-curStop)/c.px)*100).toFixed(1)+'%</span></div>';
+          // 峰值价信息 (止损价已在上方速查卡显示)
+          html+='<div style="margin-top:6px;font-size:9.5px;color:#8b949e;text-align:right">峰值 $'+hwmPx.toFixed(2)+'</div>';
           html+='<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #30363d;display:flex;justify-content:space-between;align-items:center"><strong style="color:#ff6b6b">🛡 风控触发</strong><span style="color:#8b949e;font-size:9.5px">额外的机械防御</span></div>';
           html+='<div style="display:grid;grid-template-columns:auto auto 1fr auto;column-gap:8px;row-gap:3px;margin-top:3px;color:#c9d1d9">';
           const flashMark = daily_v <= -8 ? '🔴' : '⏳';
@@ -1141,11 +1211,8 @@ function renderPortfolioView(){
           html+='</div>';
         }
         html+='</div>';
-        html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10.5px;color:#8b949e;margin-bottom:6px">';
-        html+='<div>买 $'+c.h.buy_price.toFixed(2)+' × '+c.h.shares+'</div>';
-        html+='<div>现 $'+c.px.toFixed(2)+'</div>';
-        html+='<div>持有 '+heldDays+' 天</div>';
-        html+='</div>';
+        // 紧凑次要信息: 仅显示持有天数和批次进度 (买/现已在上方速查卡)
+        html+='<div style="font-size:10.5px;color:#8b949e;margin-bottom:6px">持有 '+heldDays+' 天 · 入场批次 '+usedBatches+'/'+planned+'</div>';
         html+='<div style="display:flex;justify-content:space-between;align-items:center;background:#0d1218;border-radius:4px;padding:5px 8px;margin-bottom:6px">';
         html+='<span style="font-size:9.5px;color:#8b949e">Conv 12 周走势</span>';
         html+='<div>'+renderSparkline(c.t,120,22)+'</div>';
