@@ -231,33 +231,62 @@ def detect_framework_tags(u, p, comp_score, conviction):
     return tags
 
 
-def regime_modifier(prices_root):
-    """v3.6: 浅熊不全跑路 (地板从 0.20 抬到 0.40)。
+def _base_regime(prices_root):
+    """SPY-only regime: bull/bear hard cap from SMA200 + 4w return.
 
-    依据: 回测显示 S6 自带的 8% 累计止损已经把 MaxDD 压到 -18%,
-    再叠加 Regime 砍到 0.20 (= 80% 现金) 是过度防御 — 浅熊里短期反弹
-    时, 0.20 让所有股票变 AVOID, 你完美错过反弹 (2024 年 5/8 月经典案例)。
-
-    新地板: 0.40 (深熊 + 加速下跌) → 1.10 (强 risk-on)。
+    v3.6 地板从 0.20 抬到 0.40 (浅熊不全跑路)。
     """
     spy_above_50 = bool(prices_root.get("spy_above_sma50"))
     spy_above_200 = bool(prices_root.get("spy_above_sma200", True))
     spy_4w = prices_root.get("spy_4w_return_pct") or 0
     spy_dist_200 = prices_root.get("spy_dist_sma200_pct") or 0
 
-    # BEAR regime — softer floor
     if not spy_above_200:
-        if spy_dist_200 < -15 or spy_4w < -12: return 0.40   # 深熊 + 加速 (原 0.20)
-        if spy_4w < -5:                        return 0.50   # 中熊 (原 0.30)
-        return 0.60                                          # 浅熊但稳 (原 0.50)
+        if spy_dist_200 < -15 or spy_4w < -12: return 0.40
+        if spy_4w < -5:                        return 0.50
+        return 0.60
 
-    # BULL regime — graded by SMA50 + momentum (略提)
     if spy_above_50 and spy_4w >= 4:    return 1.10
     if spy_above_50 and spy_4w >= 1:    return 1.00
     if spy_above_50:                     return 0.90
-    if -3 <= spy_4w < 0:                 return 0.80   # 原 0.75
-    if spy_4w < -5:                      return 0.65   # 原 0.55
-    return 0.75                                         # 原 0.65
+    if -3 <= spy_4w < 0:                 return 0.80
+    if spy_4w < -5:                      return 0.65
+    return 0.75
+
+
+def _vix_dampener(prices_root):
+    """v3.6: VIX 恐慌阻尼层 — 在 SPY-trend regime 之上叠一层市场恐慌信号。
+
+    SPY 看 trend, VIX 看 fear — 两个信号互补。SPY 还没破 SMA200 但 VIX > 30
+    意味着 market 已经在定价"暴跌将至", 应该降仓位。
+
+    Levels (基于历史 VIX 分位):
+      VIX < 18  平静   ×1.00
+      VIX < 25  正常   ×1.00
+      VIX < 30  紧张   ×0.85
+      VIX < 40  压力   ×0.65
+      VIX ≥ 40  恐慌   ×0.40
+    """
+    vix = prices_root.get("vix_close")
+    if vix is None:
+        return 1.0
+    if vix >= 40: return 0.40
+    if vix >= 30: return 0.65
+    if vix >= 25: return 0.85
+    return 1.0
+
+
+def regime_modifier(prices_root):
+    """v3.6: 复合 regime = base (SPY trend) × VIX dampener.
+
+    示例:
+      SPY 强 risk-on (1.10) + VIX 18 (×1.00) = 1.10  无影响
+      SPY 弱多头 (0.90) + VIX 28 (×0.85)     = 0.765 (降一档)
+      SPY 浅熊 (0.60) + VIX 35 (×0.65)       = 0.39  (深防御)
+    """
+    base = _base_regime(prices_root)
+    damp = _vix_dampener(prices_root)
+    return round(base * damp, 3)
 
 
 def conviction_score(ts, eq, fc, rm):
@@ -491,6 +520,19 @@ def main():
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "spy_4w_return_pct": prices.get("spy_4w_return_pct"),
         "spy_above_sma50": prices.get("spy_above_sma50"),
+        "spy_above_sma200": prices.get("spy_above_sma200"),
+        "vix_close": prices.get("vix_close"),
+        "vix_4w_change_pct": prices.get("vix_4w_change_pct"),
+        "vix_percentile_1y": prices.get("vix_percentile_1y"),
+        "vix_zone": (
+            None if prices.get("vix_close") is None else (
+                "平静" if prices["vix_close"] < 18 else
+                "正常" if prices["vix_close"] < 25 else
+                "紧张" if prices["vix_close"] < 30 else
+                "压力" if prices["vix_close"] < 40 else
+                "恐慌"
+            )
+        ),
         "regime_modifier": rm,
         "regime_label": (
             "强 risk-on" if rm >= 1.05 else

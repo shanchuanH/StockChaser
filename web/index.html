@@ -73,10 +73,10 @@ tr.detail td{background:#0d1218;padding:14px 20px;border-bottom:2px solid var(--
 </head>
 <body>
 <header>
-  <h1>📊 StockChaser <span class="sub">AI链 · 追涨看板 v3</span><span class="regime-badge" id="regime-badge">—</span></h1>
+  <h1>📊 StockChaser <span class="sub">AI链 · 追涨看板 v3.6</span><span class="regime-badge" id="regime-badge">—</span><span class="regime-badge" id="vix-badge" style="display:none;margin-left:6px">—</span></h1>
   <div class="meta" id="meta">
     <div><span class="live-dot"></span><span id="last-updated">连接中...</span></div>
-    <div>SPY 4w: <span id="spy">-</span> &nbsp;<button class="refresh-btn" id="refresh-btn">刷新</button></div>
+    <div>SPY 4w: <span id="spy">-</span> &nbsp; VIX: <span id="vix">-</span> &nbsp;<button class="refresh-btn" id="refresh-btn">刷新</button></div>
   </div>
 </header>
 <div id="advisory-banner" style="display:none;background:rgba(63,185,80,.12);border-bottom:1px solid #3fb950;color:#3fb950;text-align:center;padding:6px 12px;font-size:12px;font-weight:600"></div>
@@ -199,6 +199,20 @@ async function loadData(){
     if(data.regime_label){
       rb.textContent=data.regime_label+" ×"+data.regime_modifier;
       rb.style.background=data.regime_modifier>=1?"rgba(63,185,80,.2)":data.regime_modifier>=0.85?"rgba(241,196,15,.15)":"rgba(214,48,49,.2)";
+    }
+    // VIX 显示 + zone 颜色
+    const vx=data.vix_close, ve=document.getElementById("vix"), vb=document.getElementById("vix-badge");
+    if(vx!=null){
+      const zone=data.vix_zone||"-";
+      const zColor = vx<18?"#3fb950":(vx<25?"#9bd5ff":(vx<30?"#f1c40f":(vx<40?"#f39c12":"#d63031")));
+      ve.textContent=vx.toFixed(1)+" ("+zone+")";
+      ve.style.color=zColor;
+      vb.textContent="VIX "+zone+" "+vx.toFixed(0);
+      vb.style.background=vx>=25?(vx>=40?"rgba(214,48,49,.25)":(vx>=30?"rgba(243,156,18,.2)":"rgba(241,196,15,.15)")):"rgba(63,185,80,.15)";
+      vb.style.color=zColor;
+      vb.style.display = vx>=25 ? "inline-block" : "none";  // 只在紧张以上显示徽标
+    } else {
+      ve.textContent="-";
     }
     updateCrashBanner();
     updateStaleBanner();

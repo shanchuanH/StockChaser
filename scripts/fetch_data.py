@@ -56,7 +56,8 @@ def fetch(days_back: int = 1100):
                     extra_tickers.add(tk)
         except Exception:
             pass
-    tickers = sorted(set([u["ticker"] for u in universe] + ["SPY", "QQQ"]) | extra_tickers)
+    # v3.6: 加 ^VIX 抓波动率指数, 用作 regime 阻尼信号
+    tickers = sorted(set([u["ticker"] for u in universe] + ["SPY", "QQQ", "^VIX"]) | extra_tickers)
     print(f"Fetching {len(tickers)} tickers ({len(extra_tickers)} extras for ETF tracking)…")
 
     end = datetime.now(timezone.utc)
@@ -110,12 +111,34 @@ def fetch(days_back: int = 1100):
     spy_above_sma200 = bool(spy_close.iloc[-1] > spy_close.iloc[-200:].mean()) if len(spy_close) >= 200 else True
     spy_dist_sma200_pct = round(float((spy_close.iloc[-1] / spy_close.iloc[-200:].mean() - 1) * 100), 2) if len(spy_close) >= 200 else 0.0
 
+    # NEW v3.6: VIX 恐慌指数 — 用作 regime 阻尼层
+    vix_close_val = None
+    vix_4w_change = None
+    vix_percentile_1y = None  # 一年百分位 (0-100), 高 = 极度恐慌
+    try:
+        vix_close = df["^VIX"]["Close"].dropna()
+        if len(vix_close) >= 1:
+            vix_close_val = round(float(vix_close.iloc[-1]), 2)
+        if len(vix_close) >= 21:
+            vix_4w_change = round(float((vix_close.iloc[-1] / vix_close.iloc[-21] - 1) * 100), 2)
+        if len(vix_close) >= 252:
+            v = vix_close.iloc[-252:]
+            vix_percentile_1y = round(float((v < vix_close_val).sum() / len(v) * 100), 1)
+        elif len(vix_close) >= 30:
+            v = vix_close
+            vix_percentile_1y = round(float((v < vix_close_val).sum() / len(v) * 100), 1)
+    except (KeyError, IndexError, TypeError) as e:
+        print(f"  ! VIX fetch warning: {e}")
+
     out = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "spy_4w_return_pct": round(spy_ret_4w, 2),
         "spy_above_sma50": spy_above_sma50,
         "spy_above_sma200": spy_above_sma200,
         "spy_dist_sma200_pct": spy_dist_sma200_pct,
+        "vix_close": vix_close_val,
+        "vix_4w_change_pct": vix_4w_change,
+        "vix_percentile_1y": vix_percentile_1y,
         "is_mock": False,
         "tickers": {},
         "extra_prices": {},
@@ -224,6 +247,10 @@ def fetch(days_back: int = 1100):
     print(f"\nWrote prices for {len(out['tickers'])} tickers → {OUT}")
     print(f"Saved history → {HIST}")
     print(f"SPY 4-week: {spy_ret_4w:+.2f}%   above SMA50: {spy_above_sma50}")
+    if vix_close_val is not None:
+        zone = "平静" if vix_close_val < 18 else ("正常" if vix_close_val < 25 else
+              ("紧张" if vix_close_val < 30 else ("压力" if vix_close_val < 40 else "恐慌")))
+        print(f"VIX: {vix_close_val} ({zone}, 1y百分位 {vix_percentile_1y}%, 4w 变化 {vix_4w_change}%)")
 
 
 if __name__ == "__main__":
