@@ -39,23 +39,21 @@ DEFAULT_CONFIG = {
         {"step": 2, "weight_pct": 7, "trigger": "涨 +3% 且未跌破 SMA10"},
         {"step": 3, "weight_pct": 6, "trigger": "突破 4W 高"},
     ],
+    # 反马丁纪律: HWM 追踪止损, 只升不降, 任一触发 = 全清
     "stop_ladder": [
-        {"after_gain_pct": 0,  "stop_logic": "initial_atr",  "desc": "入场价 - 1.5 ATR"},
-        {"after_gain_pct": 5,  "stop_logic": "breakeven",    "desc": "保本"},
-        {"after_gain_pct": 10, "stop_logic": "entry_plus_5", "desc": "入场价 + 5%"},
-        {"after_gain_pct": 20, "stop_logic": "trail_sma20",  "desc": "动态 SMA20"},
+        {"after_gain_pct": 0,   "stop_logic": "minus_8_pct", "desc": "入场价 -8% 硬止损"},
+        {"after_gain_pct": 20,  "stop_logic": "breakeven",   "desc": "保本 (浮盈达 +20% 升档)"},
+        {"after_gain_pct": 50,  "stop_logic": "hwm_x_0.85",  "desc": "峰值 -15% 追踪"},
+        {"after_gain_pct": 100, "stop_logic": "hwm_x_0.80",  "desc": "峰值 -20% 追踪 (让赢家奔跑)"},
     ],
-    "profit_taking": [
-        {"r_multiple": 1, "reduce_fraction": 0.25, "desc": "+1R 减 1/4"},
-        {"r_multiple": 2, "reduce_fraction": 0.33, "desc": "+2R 减 1/3"},
-        {"r_multiple": 3, "reduce_fraction": 0.00, "desc": "+3R 骑趋势, SMA20 追踪"},
-    ],
+    # 反马丁原则: 不设固定止盈 — 截断左尾、放任右尾。
+    # profit_taking 字段保留为空列表, 前端据此隐藏止盈表。
+    "profit_taking": [],
     "exit_triggers": [
-        "触发硬止损 → 全部清仓",
-        "Conviction 跌破 45 → 减半仓",
-        "SPY 跌破 SMA50 → 减半仓",
-        "时间止损: 4 周无 +1R → 减半仓",
-        "单日跌幅 > 8% → 减至 30%",
+        "触发追踪止损 → 全部清仓 (任一档触发都全清)",
+        "Conviction 跌破 45 → 减半 (基本面恶化)",
+        "单日跌幅 > 8% → 减至 30% (黑天鹅机械防御)",
+        "SPY 跌破 SMA50 → 全仓减半 (大盘转熊)",
     ],
 }
 
@@ -156,42 +154,33 @@ def build_playbook(row, config=None):
                 "cash": round(batch_cash, 2),
             })
 
-    # Stop ladder — turn each rule into a concrete price
+    # Stop ladder — 反马丁 HWM 追踪止损
+    # 把每条规则转成具体价位 (HWM 档位用入场时假设的峰值价计算示例)
     stop_ladder = []
-    initial_stop = round(price - stop_distance, 2)
+    initial_stop = round(price * 0.92, 2)  # -8% 硬止损 (与 dynamic_stops.py 对齐)
     for s in config.get("stop_ladder", DEFAULT_CONFIG["stop_ladder"]):
         gain = s["after_gain_pct"] / 100
-        if s["stop_logic"] == "initial_atr":
+        trigger_price = round(price * (1 + gain), 2)
+        if s["stop_logic"] == "minus_8_pct":
             stop_price = initial_stop
         elif s["stop_logic"] == "breakeven":
-            stop_price = round(price, 2)  # entry price
-        elif s["stop_logic"] == "entry_plus_5":
-            stop_price = round(price * 1.05, 2)
-        elif s["stop_logic"] == "trail_sma20":
-            stop_price = row.get("sma_20")  # snapshot — will move with SMA20
+            stop_price = round(price, 2)
+        elif s["stop_logic"] == "hwm_x_0.85":
+            # 示例: 假设触发时峰值 = trigger_price
+            stop_price = round(trigger_price * 0.85, 2)
+        elif s["stop_logic"] == "hwm_x_0.80":
+            stop_price = round(trigger_price * 0.80, 2)
         else:
             stop_price = None
         stop_ladder.append({
             "after_gain_pct": s["after_gain_pct"],
-            "trigger_price": round(price * (1 + gain), 2),
+            "trigger_price": trigger_price,
             "stop_price": stop_price,
             "desc": s["desc"],
         })
 
-    # Profit taking — 1R, 2R, 3R targets
-    R = stop_distance  # 1R = stop distance
+    # 反马丁: 不设固定止盈。profit_taking 始终为空 — 让赢家奔跑。
     profit_taking = []
-    for pt in config.get("profit_taking", DEFAULT_CONFIG["profit_taking"]):
-        r = pt["r_multiple"]
-        tgt_price = round(price + r * R, 2)
-        profit_taking.append({
-            "r_multiple": r,
-            "target_price": tgt_price,
-            "gain_pct": round(r * R / price * 100, 1),
-            "reduce_fraction": pt["reduce_fraction"],
-            "shares_to_sell": int(total_shares * pt["reduce_fraction"]),
-            "desc": pt["desc"],
-        })
 
     exit_triggers = config.get("exit_triggers", DEFAULT_CONFIG["exit_triggers"])
 

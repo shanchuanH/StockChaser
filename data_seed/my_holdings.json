@@ -31,7 +31,10 @@
     ],
     "dip_ladder": null,
     "high_conviction": true,
-    "current_stop_price": 165.66
+    "current_stop_price": 165.66,
+    "hwm_price": 188.28,
+    "stop_label": "初始 -8% 硬止损 (浮盈 +4.6%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": 4.57
   },
   "AMZN": {
     "ticker": "AMZN",
@@ -86,18 +89,18 @@
     "stop_loss_pct": -0.08,
     "profit_ladder": [
       {
-        "trigger_pct": 0.1,
-        "sell_pct_of_peak": 0.25,
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.15,
         "name": "tier_1"
       },
       {
-        "trigger_pct": 0.2,
-        "sell_pct_of_peak": 0.25,
+        "trigger_pct": 0.4,
+        "sell_pct_of_peak": 0.15,
         "name": "tier_2"
       },
       {
-        "trigger_pct": 0.3,
-        "sell_pct_of_peak": 0.33,
+        "trigger_pct": 0.7,
+        "sell_pct_of_peak": 0.2,
         "name": "tier_3"
       }
     ],
@@ -117,7 +120,10 @@
     ],
     "dip_ladder": null,
     "current_stop_price": 194.26,
-    "high_conviction": false
+    "high_conviction": false,
+    "hwm_price": 237.3,
+    "stop_label": "初始 -8% 硬止损 (浮盈 -1.5%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": -1.53
   },
   "GOOGL": {
     "ticker": "GOOGL",
@@ -172,18 +178,18 @@
     "stop_loss_pct": -0.08,
     "profit_ladder": [
       {
-        "trigger_pct": 0.1,
-        "sell_pct_of_peak": 0.25,
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.15,
         "name": "tier_1"
       },
       {
-        "trigger_pct": 0.2,
-        "sell_pct_of_peak": 0.25,
+        "trigger_pct": 0.4,
+        "sell_pct_of_peak": 0.15,
         "name": "tier_2"
       },
       {
-        "trigger_pct": 0.3,
-        "sell_pct_of_peak": 0.33,
+        "trigger_pct": 0.7,
+        "sell_pct_of_peak": 0.2,
         "name": "tier_3"
       }
     ],
@@ -203,7 +209,10 @@
     ],
     "dip_ladder": null,
     "current_stop_price": 17.98,
-    "high_conviction": false
+    "high_conviction": false,
+    "hwm_price": 20.65,
+    "stop_label": "初始 -8% 硬止损 (浮盈 -2.2%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": -2.2
   },
   "LSCC": {
     "ticker": "LSCC",
@@ -222,18 +231,18 @@
     "stop_loss_pct": -0.08,
     "profit_ladder": [
       {
-        "trigger_pct": 0.1,
-        "sell_pct_of_peak": 0.25,
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.15,
         "name": "tier_1"
       },
       {
-        "trigger_pct": 0.2,
-        "sell_pct_of_peak": 0.25,
+        "trigger_pct": 0.4,
+        "sell_pct_of_peak": 0.15,
         "name": "tier_2"
       },
       {
-        "trigger_pct": 0.3,
-        "sell_pct_of_peak": 0.33,
+        "trigger_pct": 0.7,
+        "sell_pct_of_peak": 0.2,
         "name": "tier_3"
       }
     ],
@@ -253,7 +262,10 @@
     ],
     "dip_ladder": null,
     "current_stop_price": 117.01,
-    "high_conviction": false
+    "high_conviction": false,
+    "hwm_price": 128.96,
+    "stop_label": "初始 -8% 硬止损 (浮盈 -1.4%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": -1.38
   },
   "MSFT": {
     "ticker": "MSFT",
@@ -314,18 +326,18 @@
     "stop_loss_pct": -0.08,
     "profit_ladder": [
       {
-        "trigger_pct": 0.1,
-        "sell_pct_of_peak": 0.25,
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.15,
         "name": "tier_1"
       },
       {
-        "trigger_pct": 0.2,
-        "sell_pct_of_peak": 0.25,
+        "trigger_pct": 0.4,
+        "sell_pct_of_peak": 0.15,
         "name": "tier_2"
       },
       {
-        "trigger_pct": 0.3,
-        "sell_pct_of_peak": 0.33,
+        "trigger_pct": 0.7,
+        "sell_pct_of_peak": 0.2,
         "name": "tier_3"
       }
     ],
@@ -345,7 +357,10 @@
     ],
     "dip_ladder": null,
     "current_stop_price": 203.32,
-    "high_conviction": false
+    "high_conviction": false,
+    "hwm_price": 237.53,
+    "stop_label": "初始 -8% 硬止损 (浮盈 -4.1%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": -4.12
   },
   "VRT": {
     "ticker": "VRT",
@@ -364,18 +379,18 @@
     "stop_loss_pct": -0.08,
     "profit_ladder": [
       {
-        "trigger_pct": 0.1,
-        "sell_pct_of_peak": 0.25,
+        "trigger_pct": 0.2,
+        "sell_pct_of_peak": 0.15,
         "name": "tier_1"
       },
       {
-        "trigger_pct": 0.2,
-        "sell_pct_of_peak": 0.25,
+        "trigger_pct": 0.4,
+        "sell_pct_of_peak": 0.15,
         "name": "tier_2"
       },
       {
-        "trigger_pct": 0.3,
-        "sell_pct_of_peak": 0.33,
+        "trigger_pct": 0.7,
+        "sell_pct_of_peak": 0.2,
         "name": "tier_3"
       }
     ],
@@ -395,7 +410,10 @@
     ],
     "dip_ladder": null,
     "current_stop_price": 316.95,
-    "high_conviction": false
+    "high_conviction": false,
+    "hwm_price": 367.92,
+    "stop_label": "初始 -8% 硬止损 (浮盈 +6.6%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": 6.57
   },
   "DRAM": {
     "ticker": "DRAM",

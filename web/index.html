@@ -237,7 +237,7 @@ function renderPendingAlerts(){
     hwm_trail:  {emoji:"📉", color:"#8b949e", label:"(已弃用) 高水位回撤"},
     time_stop:  {emoji:"⏰", color:"#8b949e", label:"(已弃用) 时间止损"},
   };
-  let html = '<div style="font-weight:700;color:#ff6b6b;margin-bottom:8px;font-size:13px">🔔 待操作信号 ('+_pendingAlerts.length+') — 这些是历史触发的事件，未操作前不会消失</div>';
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:700;color:#ff6b6b;font-size:14px">🔔 需要你操作 ('+_pendingAlerts.length+')</div><div style="color:#8b949e;font-size:10.5px">触发条件回升后会自动消失，不需要手动撤</div></div>';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:8px">';
   for(const a of _pendingAlerts){
     const m = typeMeta[a.type] || {emoji:"❗", color:"#8b949e", label:a.type};
@@ -838,11 +838,15 @@ function renderPlaybook(r){
   html+='<table style="width:100%;font-size:11px;margin-top:6px"><thead><tr style="background:#1a1f26"><th style="padding:5px 8px">涨幅</th><th class="num" style="padding:5px 8px">止损线</th><th style="padding:5px 8px">说明</th></tr></thead><tbody>';
   for(const s of (pb.stop_ladder||[]))html+='<tr><td style="padding:5px 8px">+'+s.after_gain_pct+'%</td><td class="num down" style="padding:5px 8px">'+(s.stop_price?'$'+fmt(s.stop_price):'动态')+'</td><td style="padding:5px 8px;color:#8b949e">'+s.desc+'</td></tr>';
   html+='</tbody></table>';
-  // Profit
-  html+='<strong style="color:#d63031;display:block;margin-top:10px">💰 阶梯减仓</strong>';
-  html+='<table style="width:100%;font-size:11px;margin-top:6px"><thead><tr style="background:#1a1f26"><th style="padding:5px 8px">+R</th><th class="num" style="padding:5px 8px">目标价</th><th class="num" style="padding:5px 8px">卖出</th><th style="padding:5px 8px">说明</th></tr></thead><tbody>';
-  for(const p of (pb.profit_taking||[]))html+='<tr><td style="padding:5px 8px">+'+p.r_multiple+'R</td><td class="num up" style="padding:5px 8px">$'+fmt(p.target_price)+'</td><td class="num" style="padding:5px 8px">'+p.shares_to_sell+'</td><td style="padding:5px 8px;color:#8b949e">'+p.desc+'</td></tr>';
-  html+='</tbody></table>';
+  // 反马丁: 不设固定止盈 — 只在出现 profit_taking 数据时才显示
+  if((pb.profit_taking||[]).length > 0){
+    html+='<strong style="color:#d63031;display:block;margin-top:10px">💰 阶梯减仓</strong>';
+    html+='<table style="width:100%;font-size:11px;margin-top:6px"><thead><tr style="background:#1a1f26"><th style="padding:5px 8px">+R</th><th class="num" style="padding:5px 8px">目标价</th><th class="num" style="padding:5px 8px">卖出</th><th style="padding:5px 8px">说明</th></tr></thead><tbody>';
+    for(const p of (pb.profit_taking||[]))html+='<tr><td style="padding:5px 8px">+'+p.r_multiple+'R</td><td class="num up" style="padding:5px 8px">$'+fmt(p.target_price)+'</td><td class="num" style="padding:5px 8px">'+p.shares_to_sell+'</td><td style="padding:5px 8px;color:#8b949e">'+p.desc+'</td></tr>';
+    html+='</tbody></table>';
+  }else{
+    html+='<div style="margin-top:10px;padding:8px 10px;background:rgba(255,165,0,0.08);border-left:3px solid #ffa500;border-radius:3px;font-size:11px;color:#ffa500"><strong>🚀 反马丁纪律</strong>: 不设固定止盈 — 让赢家奔跑。任一止损档触发即全清。</div>';
+  }
   html+='</div>';
   return html;
 }
@@ -905,30 +909,27 @@ function renderPortfolioView(){
           reason="不止盈不止损，跌 -5% 才加仓";
         }
       }else{
-        // 反马丁 (标准 + high_conviction)
+        // 反马丁纪律 v2: HWM 追踪止损, 不设固定止盈, 让赢家奔跑
+        // 当前止损线 (后端 dynamic_stops.py 写入), 没有就回退到 -8%
+        const curStop = h.current_stop_price || personal_stop;
+        const stopLabel = h.stop_label || ("初始 -8% 硬止损");
+        const hwm = h.hwm_price || Math.max(px, h.buy_price);
+        // 距止损的缓冲 (用于卡片提示)
+        const buffer_pct = ((px - curStop) / px * 100);
+
         if(daily_pct <= -8){
           verb="SELL"; verb_color="#d63031";
           const cutN = Math.floor(h.shares * 0.7);
           action_text="🚨 减至 30%：卖 "+cutN+" 股 (70%)";
           reason="单日 "+daily_pct.toFixed(2)+"% 黑天鹅，剩 "+(h.shares-cutN)+" 股观察";
-        }else if(px <= personal_stop){
+        }else if(px <= curStop){
           verb="SELL"; verb_color="#d63031";
           action_text="🛑 全清 "+h.shares+" 股 (100%)";
-          reason="跌穿你买入价 $"+h.buy_price.toFixed(2)+" 的 -8% 止损 $"+personal_stop.toFixed(2);
+          reason="价 $"+px.toFixed(2)+" 跌破追踪止损 $"+curStop.toFixed(2)+" — "+stopLabel;
         }else if(conv<45){
           verb="SELL"; verb_color="#f39c12";
           action_text="⚠️ 卖一半 "+Math.floor(h.shares/2)+" 股 (50%)";
-          reason="Conv "+conv+" < 45，仓位减半";
-        }else if(!isHC && ret>=30){
-          verb="SELL"; verb_color="#3fb950";
-          const sellN = Math.floor(h.shares*0.33);
-          action_text="💰 卖 "+sellN+" 股 (33%)";
-          reason="+"+ret.toFixed(1)+"% 锁利润，剩 "+(h.shares-sellN)+" 股骑趋势";
-        }else if(!isHC && ret>=20){
-          verb="SELL"; verb_color="#3fb950";
-          const sellN = Math.floor(h.shares*0.25);
-          action_text="💰 卖 "+sellN+" 股 (25%)";
-          reason="+"+ret.toFixed(1)+"% 第二档止盈，剩 "+(h.shares-sellN)+" 股";
+          reason="Conv "+conv+" < 45，基本面恶化";
         }else if(pb && pb.entry_plan && h.batches && h.batches.length<pb.entry_plan.length){
           const next=pb.entry_plan[h.batches.length];
           if(next && px>=next.price*0.99){
@@ -939,18 +940,34 @@ function renderPortfolioView(){
           }
         }
         if(verb==="HOLD"){
-          if(!isHC && ret>=10){
-            verb_color="#3fb950";
-            action_text="⬆️ 卖 "+Math.floor(h.shares*0.25)+" 股 (25%) 锁首档利润";
-            reason="+"+ret.toFixed(1)+"%，第一档止盈触发，止损上移到买入价 $"+h.buy_price.toFixed(2);
-          }
-          else if(isHC && ret>=10){
+          if(ret >= 100){
             verb_color="#ffa500";
-            action_text="🔥 持有 (高确信不止盈)";
-            reason="+"+ret.toFixed(1)+"%，骑全程，只在 -8% 止损";
+            action_text="🚀 让赢家奔跑";
+            reason="+"+ret.toFixed(1)+"%，峰值 -20% 追踪 (止损 $"+curStop.toFixed(2)+")";
           }
-          else if(ret<-3){ verb_color="#f39c12"; action_text="👀 盯紧止损 (-8% = $"+personal_stop.toFixed(2)+")"; reason=ret.toFixed(1)+"%，接近止损线"; }
-          else { action_text="✓ 持有不动"; reason="新仓发酵中，未触发任何买卖点"; }
+          else if(ret >= 50){
+            verb_color="#3fb950";
+            action_text="📈 骑趋势";
+            reason="+"+ret.toFixed(1)+"%，峰值 -15% 追踪 (止损 $"+curStop.toFixed(2)+")";
+          }
+          else if(ret >= 20){
+            verb_color="#3fb950";
+            action_text="✓ 保本档持有";
+            reason="+"+ret.toFixed(1)+"%，止损已升保本 ($"+curStop.toFixed(2)+")，等 +50% 切峰值追踪";
+          }
+          else if(buffer_pct < 2 && ret < 0){
+            verb_color="#f39c12";
+            action_text="👀 盯紧止损 $"+curStop.toFixed(2);
+            reason=ret.toFixed(1)+"%，距止损只剩 "+buffer_pct.toFixed(1)+"%";
+          }
+          else if(ret < 0){
+            action_text="✓ 持有不动";
+            reason=ret.toFixed(1)+"%，止损 $"+curStop.toFixed(2)+" (-"+(100-curStop/h.buy_price*100).toFixed(1)+"%)";
+          }
+          else {
+            action_text="✓ 持有不动";
+            reason="+"+ret.toFixed(1)+"%，等浮盈 +20% 升保本档";
+          }
         }
       }
     }
@@ -973,9 +990,19 @@ function renderPortfolioView(){
   let html='<div style="padding:0 20px 20px">';
   html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">';
   html+='<h3 style="color:#fff;margin:0">💼 我的持仓 ('+tickers.length+'/'+(config.max_positions||10)+')</h3>';
-  html+='<div style="display:flex;gap:6px">';
-  html+='<a href="/api/holdings/export" download="my_holdings_backup.json" style="background:#2a313c;color:#c9d1d9;border:1px solid #444;padding:5px 10px;border-radius:4px;font-size:11px;text-decoration:none">⬇️ 导出备份</a>';
+  html+='<div style="display:flex;gap:6px;align-items:center">';
+  html+='<button onclick="document.getElementById(\'discipline-card\').style.display=document.getElementById(\'discipline-card\').style.display===\'none\'?\'block\':\'none\'" style="background:#1f3a5f;color:#9bd5ff;border:1px solid #3a6ea5;padding:5px 10px;border-radius:4px;font-size:11px;cursor:pointer">📜 纪律速查</button>';
+  html+='<a href="/api/holdings/export" download="my_holdings_backup.json" style="background:#2a313c;color:#c9d1d9;border:1px solid #444;padding:5px 10px;border-radius:4px;font-size:11px;text-decoration:none">⬇️ 导出</a>';
   html+='<button onclick="importHoldings()" style="background:#2a313c;color:#c9d1d9;border:1px solid #444;padding:5px 10px;border-radius:4px;font-size:11px;cursor:pointer">⬆️ 导入</button>';
+  html+='</div></div>';
+  // 纪律速查卡 — 默认展开, 点按钮折叠
+  html+='<div id="discipline-card" style="background:linear-gradient(135deg,#0f1f2e,#1a1f26);border:1px solid #3a6ea5;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:11.5px">';
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong style="color:#9bd5ff;font-size:13px">📜 反马丁纪律速查 — 截断左尾, 放任右尾</strong><span style="color:#8b949e;font-size:10px">(点 "📜 纪律速查" 隐藏)</span></div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+  html+='<div><div style="color:#3fb950;font-weight:600;margin-bottom:4px">🛡 追踪止损 (只升不降)</div>';
+  html+='<div style="color:#c9d1d9;line-height:1.7">• 浮盈 &lt; +20% → 入场 -8% 硬止损<br>• 浮盈 ≥ +20% → 升保本<br>• 浮盈 ≥ +50% → 峰值 -15% 追踪<br>• 浮盈 ≥ +100% → 峰值 -20% 追踪</div></div>';
+  html+='<div><div style="color:#ff6b6b;font-weight:600;margin-bottom:4px">⚡ 额外触发 (机械防御)</div>';
+  html+='<div style="color:#c9d1d9;line-height:1.7">• 单日 ≤ -8% → 减至 30%(黑天鹅)<br>• Conv &lt; 45 → 减半 (基本面恶化)<br>• SPY &lt; SMA50 → 全仓减半 (大盘转熊)<br>• <strong style="color:#ffa500">不设固定止盈, 任一止损=全清</strong></div></div>';
   html+='</div></div>';
   // Cash card: use account_total if set, else fall back to portfolio_cash_usd
   const accountTotal = config.account_total_usd || config.portfolio_cash_usd || 20000;
@@ -1089,25 +1116,26 @@ function renderPortfolioView(){
           html+='</div>';
           html+='<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #30363d;color:#8b949e;font-size:9.5px">📌 买入持有 · 不止盈不止损 · 跌 -5% 才加仓</div>';
         }else{
-          // 反马丁: 止损阶梯 always; 止盈阶梯 only if NOT high_conviction
-          if(!isHCL){
-            const tp1_p = buyP*1.10, tp2_p = buyP*1.20, tp3_p = buyP*1.30;
-            const tp1_n = Math.floor(totShares*0.25), tp2_n = Math.floor(totShares*0.33);
-            html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><strong style="color:#3fb950">📊 止盈阶梯</strong><span style="color:#8b949e;font-size:9.5px">(基于买入价 $'+buyP.toFixed(2)+')</span></div>';
-            html+='<div style="display:grid;grid-template-columns:auto auto 1fr auto;column-gap:8px;row-gap:3px;color:#c9d1d9">';
-            html+='<span>'+mark(c.px>=tp1_p)+'</span><span class="num" style="color:#3fb950">+10%</span><span>$'+tp1_p.toFixed(2)+' → 卖 25% ('+tp1_n+'股)</span><span style="color:#8b949e">止损升保本</span>';
-            html+='<span>'+mark(c.px>=tp2_p)+'</span><span class="num" style="color:#3fb950">+20%</span><span>$'+tp2_p.toFixed(2)+' → 卖 25% ('+tp1_n+'股)</span><span style="color:#8b949e">止损升+5%</span>';
-            html+='<span>'+mark(c.px>=tp3_p)+'</span><span class="num" style="color:#3fb950">+30%</span><span>$'+tp3_p.toFixed(2)+' → 卖 33% ('+tp2_n+'股)</span><span style="color:#8b949e">余仓 SMA20 追踪</span>';
-            html+='</div>';
-            html+='<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #30363d;display:flex;justify-content:space-between;align-items:center"><strong style="color:#ff6b6b">🛑 止损阶梯</strong><span style="color:#8b949e;font-size:9.5px">硬规则</span></div>';
-          }else{
-            html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><strong style="color:#ffa500">🔥 高确信 — 不止盈, 骑全程</strong><span style="color:#8b949e;font-size:9.5px">单一 -8% 止损</span></div>';
-          }
+          // 反马丁纪律 v2: HWM 追踪止损 (0/20/50/100), 不设固定止盈
+          const retPct = c.ret;
+          const curStop = c.h.current_stop_price || stop_p_full;
+          const hwmPx = c.h.hwm_price || Math.max(c.px, buyP);
+          const stage1_done = retPct >= 20;   // 保本档
+          const stage2_done = retPct >= 50;   // 峰值 -15% 追踪
+          const stage3_done = retPct >= 100;  // 峰值 -20% 追踪
+          html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><strong style="color:#58a6ff">📈 追踪止损阶梯</strong><span style="color:#8b949e;font-size:9.5px">(反马丁: 不设止盈, 任一档触发=全清)</span></div>';
+          html+='<div style="display:grid;grid-template-columns:auto auto 1fr auto;column-gap:8px;row-gap:3px;color:#c9d1d9">';
+          html+='<span>'+(retPct<20?'▶':'✅')+'</span><span class="num" style="color:#8b949e">&lt;+20%</span><span>初始 -8% 止损 $'+(buyP*0.92).toFixed(2)+'</span><span style="color:#8b949e">硬止损</span>';
+          html+='<span>'+mark(stage1_done)+'</span><span class="num" style="color:#3fb950">+20%</span><span>升保本 $'+buyP.toFixed(2)+'</span><span style="color:#8b949e">不再亏损</span>';
+          html+='<span>'+mark(stage2_done)+'</span><span class="num" style="color:#3fb950">+50%</span><span>峰值 -15% 追踪 $'+(hwmPx*0.85).toFixed(2)+'</span><span style="color:#8b949e">骑趋势</span>';
+          html+='<span>'+mark(stage3_done)+'</span><span class="num" style="color:#ffa500">+100%</span><span>峰值 -20% 追踪 $'+(hwmPx*0.80).toFixed(2)+'</span><span style="color:#8b949e">让赢家奔跑</span>';
+          html+='</div>';
+          // 当前生效止损 — 高亮显示
+          html+='<div style="margin-top:6px;padding:5px 8px;background:#21262d;border-radius:4px;border-left:3px solid '+(c.px<=curStop?'#d63031':'#58a6ff')+';display:flex;justify-content:space-between;font-size:10.5px"><span style="color:#c9d1d9"><strong>当前止损:</strong> $'+curStop.toFixed(2)+'</span><span style="color:#8b949e">峰值 $'+hwmPx.toFixed(2)+' · 距止损 '+(((c.px-curStop)/c.px)*100).toFixed(1)+'%</span></div>';
+          html+='<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #30363d;display:flex;justify-content:space-between;align-items:center"><strong style="color:#ff6b6b">🛡 风控触发</strong><span style="color:#8b949e;font-size:9.5px">额外的机械防御</span></div>';
           html+='<div style="display:grid;grid-template-columns:auto auto 1fr auto;column-gap:8px;row-gap:3px;margin-top:3px;color:#c9d1d9">';
           const flashMark = daily_v <= -8 ? '🔴' : '⏳';
           html+='<span>'+flashMark+'</span><span class="num" style="color:#ff6b6b">单日≤-8%</span><span>今日 '+daily_v.toFixed(2)+'% → <strong>减至 30%（卖 70%）</strong></span><span style="color:#8b949e">黑天鹅</span>';
-          const stopMark = lossHit ? '🔴' : '⏳';
-          html+='<span>'+stopMark+'</span><span class="num" style="color:#ff6b6b">-8%</span><span>$'+stop_p_full.toFixed(2)+' → <strong>一次性全清 '+totShares+' 股 (100%)</strong></span><span style="color:#8b949e">硬止损</span>';
           const convMark = convVal < 45 ? '🔴' : '⏳';
           html+='<span>'+convMark+'</span><span class="num" style="color:#f39c12">Conv&lt;45</span><span>当前 '+convVal+' → <strong>卖一半 '+half_n+' 股 (50%)</strong></span><span style="color:#8b949e">基本面恶化</span>';
           html+='</div>';

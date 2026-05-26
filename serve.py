@@ -66,6 +66,64 @@ SEED_MERGE_NEW_KEYS = {
     "my_holdings.json",
 }
 
+# Files whose STRATEGY fields should sync from seed → disk on every cold
+# start, while preserving user-editable financial fields (cash, account
+# total, position limits — those are edited via UI and must NOT be
+# overwritten by the seed).
+# Example: changing stop_ladder thresholds in git → propagates to Render
+# without trampling portfolio_cash_usd / account_total_usd.
+SEED_RECONCILE_PORTFOLIO_FIELDS = {
+    "stop_ladder",
+    "profit_taking",
+    "exit_triggers",
+    "entry_batches",
+    "entry_style",
+    "cash_buffer_pct",
+}
+SEED_RECONCILE_PORTFOLIO_FILES = {
+    "portfolio.json",
+}
+
+
+def _reconcile_portfolio_strategy(seed_path, disk_path):
+    """Sync strategy fields from seed → disk; keep user financial fields.
+
+    Strategy fields (overwritten): stop_ladder, profit_taking,
+    exit_triggers, entry_batches, entry_style, cash_buffer_pct.
+    Preserved: portfolio_cash_usd, account_total_usd, max_positions,
+    risk_per_trade_pct, max_position_size_pct.
+    """
+    import shutil
+    try:
+        seed = json.loads(seed_path.read_text(encoding="utf-8"))
+        if not isinstance(seed, dict):
+            return False, "seed is not a dict"
+        if not disk_path.exists():
+            shutil.copy2(seed_path, disk_path)
+            return True, f"seeded fresh ({len(seed)} keys)"
+        disk = json.loads(disk_path.read_text(encoding="utf-8"))
+        if not isinstance(disk, dict):
+            return False, "disk is not a dict"
+        changed = []
+        for field in SEED_RECONCILE_PORTFOLIO_FIELDS:
+            if field in seed:
+                if disk.get(field) != seed[field]:
+                    disk[field] = seed[field]
+                    changed.append(field)
+            elif field in disk:
+                # Seed dropped the field → propagate removal
+                del disk[field]
+                changed.append(f"-{field}")
+        if not changed:
+            return False, "strategy already in sync"
+        disk_path.write_text(
+            json.dumps(disk, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return True, "synced: " + ", ".join(changed)
+    except Exception as exc:
+        return False, str(exc)
+
 
 def _merge_dict_new_keys(seed_path, disk_path):
     """Reconcile seed JSON → disk JSON.
@@ -145,14 +203,16 @@ def _seed_data_dir():
     files baked into the git build. We seed canonical files from
     data_seed/ which lives outside the mount.
 
-    Three flavors:
-      - always-refresh (backtest_results.json, conviction_history.json):
-        overwrite when seed mtime is newer than on-disk so new local
-        runs reach Render.
+    Four flavors:
+      - always-refresh (backtest_results.json, conviction_history.json,
+        universe.json): overwrite when seed mtime is newer than on-disk.
       - merge-new-keys (my_holdings.json): add entries from seed that
         don't exist on disk; leave user-edited entries alone.
-      - seed-if-absent (universe.json, portfolio.json): copy only if
-        absent so server-side edits survive across deploys.
+      - reconcile-strategy (portfolio.json): sync strategy fields from
+        seed (stop_ladder, profit_taking, ...) but keep user financial
+        edits (portfolio_cash_usd, account_total_usd, max_positions).
+      - seed-if-absent (everything else): copy only if absent so
+        server-side edits survive across deploys.
     """
     if not SEED.exists():
         return
@@ -170,6 +230,10 @@ def _seed_data_dir():
                 ok, msg = _merge_dict_new_keys(src, dst)
                 if ok:
                     print(f"merge {dst.name}: {msg}")
+            elif src.name in SEED_RECONCILE_PORTFOLIO_FILES:
+                ok, msg = _reconcile_portfolio_strategy(src, dst)
+                if ok:
+                    print(f"reconcile {dst.name}: {msg}")
             elif not dst.exists():
                 shutil.copy2(src, dst)
                 print(f"seeded {dst.name} from data_seed/")

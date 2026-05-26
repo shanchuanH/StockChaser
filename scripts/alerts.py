@@ -7,20 +7,21 @@ Why this exists:
   user sees "🔔 待操作: QCOM 周一暴跌 -13%" until they explicitly dismiss it.
 
 Triggers detected (per holding, per run):
-  flash_5         single-day ≤ -5%   → reduce 50%
   flash_8         single-day ≤ -8%   → reduce to 30%
-  stop_8          cumulative ≤ -8%  → close all
-  conv_break      Conv < 45         → reduce 50%
-  hwm_trail       price ≤ HWM*0.85 (high-water-mark trail) → reduce 50%
-  time_stop       held >= 28d AND ret < 12% (no +1R) → reduce 50%
+  stop_8          cumulative ≤ -8%   → close all
+  conv_break      Conv < 45          → reduce 50%
+
+Active-list behavior (active_alerts):
+  - Filters dismissed + snoozed (original)
+  - NEW: re-validates trigger condition against latest price/Conv. If the
+    condition no longer holds (e.g. price recovered above stop_8 threshold),
+    the alert is auto-hidden — history is preserved in pending_alerts.json.
+  - NEW: de-dupes by (ticker, type) — only the most recent trigger shows.
 
 Output: data/pending_alerts.json
   { ticker: [ {id, type, triggered_at, trigger_price, trigger_metric,
               action, shares_to_sell, shares_remaining, dismissed,
               dismissed_at, snooze_until}, ... ] }
-
-De-dup by id = "{ticker}-{YYYY-MM-DD}-{type}". Re-running on the same day
-will not duplicate alerts.
 """
 from __future__ import annotations
 import json
@@ -58,7 +59,6 @@ def _hwm_per_ticker(holdings):
         return out
     try:
         import csv
-        # Build {ticker: [(date, close)]}
         rows_by_t = {}
         with HISTORY_CSV.open(encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -75,7 +75,6 @@ def _hwm_per_ticker(holdings):
         for t, h in holdings.items():
             buy_date = h.get("buy_date", "")
             arr = rows_by_t.get(t, [])
-            # Filter to since buy_date
             since = [c for d, c in arr if d >= buy_date]
             if since:
                 out[t] = max(since)
@@ -105,20 +104,18 @@ def detect_and_persist():
             existing_ids.add(a.get("id"))
 
     new_alerts = []
-    hwm_map = _hwm_per_ticker(holdings)
 
     for t, h in holdings.items():
         r = rows_by_t.get(t)
         extra = extras.get(t)
-        # Resolve current price
         if r:
             px = r.get("latest_price")
             daily = r.get("daily_return_pct") or 0
             conv = r.get("conviction_score") or 100
         elif extra:
             px = extra.get("latest_price")
-            daily = 0  # ETF extras don't carry daily
-            conv = 100  # not strategy-managed
+            daily = 0
+            conv = 100
         else:
             continue
         if not px:
@@ -127,8 +124,7 @@ def detect_and_persist():
         shares = h.get("shares") or 0
         if buy <= 0 or shares <= 0:
             continue
-        category = h.get("category")  # ETF/external — only trail-stop applies
-        # NEW: strategy-aware. "anti_martingale" = sell triggers; "martingale" = dip-buy only.
+        category = h.get("category")
         strategy = h.get("strategy", "anti_martingale")
         ret_pct = (px / buy - 1) * 100
 
@@ -156,32 +152,19 @@ def detect_and_persist():
             pending.setdefault(t, []).append(alert)
             existing_ids.add(aid)
 
-        # ----- Triggers (V1 — backtested winning set, May 2022→May 2026: +189% CAGR 30%) -----
-        # Removed by 4-yr backtest证伪:
-        #   flash_5  (单日 -5%)    — 4 年触发 156 次, 牛市损失 145pp 远超熊市保护 0pp
-        #   hwm_trail (峰值 -15%) — 同样原因
-        #   time_stop  (4 周无 +1R) — V2 全套加起来熊市保护 ≈ 0
-        # 保留的是 portfolio.json 原文 + 实测有效的:
         if strategy == "anti_martingale" and category not in ("etf", "external"):
-            # ===== Anti-martingale: hard stops + Conv-break =====
-            # 1. Single-day flash crash ≤ -8% (黑天鹅) → reduce to 30%
+            # 反马丁纪律: 硬止损 + 单日暴跌 + Conviction 跌破。
+            # 不设固定止盈 — 让赢家奔跑。
             if daily <= -8:
                 add_alert("flash_8", f"单日 {daily:.2f}%",
-                          f"减至 30%（卖 70%）", int(shares * 0.7))
-            # 2. Cumulative -8% hard stop → close all
+                          "减至 30%（卖 70%）", int(shares * 0.7))
             if ret_pct <= -8:
                 add_alert("stop_8", f"累计 {ret_pct:.2f}% (买入 ${buy:.2f})",
                           "全清", shares)
-            # 3. Conviction breakdown
             if conv < 45:
                 add_alert("conv_break", f"Conv {conv} < 45",
                           "卖一半（基本面恶化）", int(shares / 2))
-
         elif strategy == "martingale":
-            # ===== Martingale: NO sell triggers, dip-buy ladder instead =====
-            # Tier 1 dip: -5% from buy_price → small add (30% of initial position)
-            # Tier 2 dip: -10% → medium (50%)
-            # Tier 3 dip: -15% → large (100% initial = double down)
             initial_shares = h.get("peak_shares", shares) or shares
             for dip in (h.get("dip_ladder") or []):
                 trigger = dip.get("trigger_pct", 0)
@@ -191,7 +174,6 @@ def detect_and_persist():
                     add_alert(name, f"累计 {ret_pct:.2f}% (跌至 {trigger*100:.0f}% 加仓档)",
                               f"💧 加仓 {buy_n} 股 (马丁档 {name})", -buy_n)
 
-    # Write back
     PENDING.write_text(json.dumps(pending, ensure_ascii=False, indent=2),
                        encoding="utf-8")
 
@@ -220,11 +202,75 @@ def dismiss(ticker, alert_id, snooze_hours=None):
     return False
 
 
+def _current_state():
+    """Snapshot of current price + Conv + daily return per ticker, for revalidation."""
+    sig = _load_json(SIGNALS, None) or {}
+    holdings = _load_json(HOLDINGS, {})
+    rows_by_t = {r["ticker"]: r for r in sig.get("rows", [])}
+    extras = sig.get("extra_prices", {})
+    out = {}
+    for t, h in holdings.items():
+        r = rows_by_t.get(t)
+        extra = extras.get(t)
+        if r:
+            out[t] = {
+                "price": r.get("latest_price"),
+                "daily": r.get("daily_return_pct") or 0,
+                "conv": r.get("conviction_score") or 100,
+                "buy_price": h.get("buy_price") or 0,
+            }
+        elif extra:
+            out[t] = {
+                "price": extra.get("latest_price"),
+                "daily": 0,
+                "conv": 100,
+                "buy_price": h.get("buy_price") or 0,
+            }
+    return out
+
+
+def _alert_still_valid(alert, state):
+    """触发条件是否仍成立 — 不成立就视为该操作已不需要, 自动撤掉。
+
+    例:
+      stop_8 触发时累计 -10%, 现在反弹到 -3% → invalid (不需要再全清)
+      flash_8 周一暴跌 -9%, 周二 daily +2% → invalid (今日不是黑天鹅)
+      conv_break Conv=42 触发, 现在 Conv=55 → invalid (基本面回升)
+    """
+    t = alert.get("ticker")
+    typ = alert.get("type")
+    st = state.get(t)
+    if not st or not st.get("price") or not st.get("buy_price"):
+        return True
+    px = st["price"]
+    buy = st["buy_price"]
+    daily = st["daily"]
+    conv = st["conv"]
+    ret_pct = (px / buy - 1) * 100 if buy else 0
+
+    if typ == "stop_8":
+        return ret_pct <= -7  # 留 1% 缓冲避免抖动
+    if typ == "flash_8":
+        return daily <= -7
+    if typ == "flash_5":
+        return daily <= -4
+    if typ == "conv_break":
+        return conv < 50  # 留 5 点缓冲
+    if typ == "hwm_trail":
+        return ret_pct <= -10
+    if typ.startswith("dip_"):
+        return ret_pct <= -3
+    return True
+
+
 def active_alerts():
-    """Return list of currently visible alerts (not dismissed, not snoozed)."""
+    """Return alerts that are not dismissed, not snoozed, and whose
+    trigger condition STILL holds (auto-expire stale ones)."""
     pending = _load_json(PENDING, {})
     now = datetime.now(timezone.utc)
+    state = _current_state()
     out = []
+    auto_expired = 0
     for t, arr in pending.items():
         for a in arr:
             if a.get("dismissed"):
@@ -239,11 +285,26 @@ def active_alerts():
                         continue
                 except ValueError:
                     pass
+            if not _alert_still_valid(a, state):
+                auto_expired += 1
+                continue
             out.append(a)
+
+    # 同一 ticker+type 只保留最新触发的一条
+    dedup = {}
+    for a in out:
+        k = (a.get("ticker"), a.get("type"))
+        prev = dedup.get(k)
+        if prev is None or a.get("triggered_at", "") > prev.get("triggered_at", ""):
+            dedup[k] = a
+    out = list(dedup.values())
+
     sev = {"flash_8": 0, "stop_8": 1, "flash_5": 2, "conv_break": 3,
            "dip_3": 4, "dip_2": 5, "dip_1": 6,
            "hwm_trail": 7, "time_stop": 8}
     out.sort(key=lambda a: (sev.get(a.get("type"), 99), a.get("triggered_at", "")))
+    if auto_expired:
+        print(f"alerts: auto-expired {auto_expired} stale alerts (condition no longer holds)")
     return out
 
 

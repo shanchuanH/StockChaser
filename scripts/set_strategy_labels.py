@@ -28,10 +28,13 @@ def assign(h, strategy):
     h["strategy"] = strategy
     if strategy == "anti_martingale":
         h["stop_loss_pct"] = -0.08         # hard stop -8% from buy_price
-        h["profit_ladder"] = [             # +10/+20/+30, 25%/25%/33%
-            {"trigger_pct": 0.10, "sell_pct_of_peak": 0.25, "name": "tier_1"},
-            {"trigger_pct": 0.20, "sell_pct_of_peak": 0.25, "name": "tier_2"},
-            {"trigger_pct": 0.30, "sell_pct_of_peak": 0.33, "name": "tier_3"},
+        # Reduced ladder (more anti-martingale — let winners run):
+        # +20/+40/+70, 15%/15%/20% → only 50% sold by +70%, half rides forever.
+        # Protection comes from the dynamic stop ratchet, not forced profit-taking.
+        h["profit_ladder"] = [
+            {"trigger_pct": 0.20, "sell_pct_of_peak": 0.15, "name": "tier_1"},
+            {"trigger_pct": 0.40, "sell_pct_of_peak": 0.15, "name": "tier_2"},
+            {"trigger_pct": 0.70, "sell_pct_of_peak": 0.20, "name": "tier_3"},
         ]
         h["entry_ladder"] = [              # standard 3-batch
             {"trigger": "initial",    "name": "step_1"},
@@ -78,9 +81,9 @@ def main():
         buy = h["buy_price"]
         shares = h["shares"]
         stop = buy * 0.92
-        tp = buy * 1.30
-        sell_qty = int(shares * 0.33)
-        print(f"  {t:<6} ${buy:>8.2f}  ${stop:>8.2f}  ${tp:>8.2f}  {sell_qty:>13}")
+        tp = buy * 1.70   # reduced ladder: tier_3 is +70% now
+        sell_q = int(shares * 0.15)  # tier_1 sells 15%
+        print(f"  {t:<6} ${buy:>8.2f}  ${stop:>9.2f}  ${tp:>9.2f}  {sell_q:>13}")
 
 
 if __name__ == "__main__":

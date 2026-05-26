@@ -1,14 +1,16 @@
-"""Compute dynamic stop-loss ratchet for each holding.
+"""动态止损追踪 — 反马丁纪律 v2 (HWM-based)
 
-Rules (monotonic upward only):
-  ret <  +10%  → step_1_price * 0.92        (initial -8%)
-  ret >= +10%  → max(initial, step_1_price * 1.00)   (breakeven)
-  ret >= +20%  → max(above, step_1_price * 1.05)     (lock +5%)
-  ret >= +30%  → max(above, step_1_price * 1.10)     (trail at +10%)
-  high_conviction: same rules but +30% also adds SMA20-trail if available.
+纪律 (anti-martingale, 只升不降):
+  浮盈 < +20%   → 入场价 × 0.92          (初始 -8% 硬止损)
+  浮盈 ≥ +20%   → 保本 (入场价)
+  浮盈 ≥ +50%   → max(prev, HWM × 0.85)  (峰值回撤 15% 退出)
+  浮盈 ≥ +100%  → max(prev, HWM × 0.80)  (峰值回撤 20% 退出)
 
-Persists `current_stop_price` on each holding so dashboard + Fidelity stay in sync.
-Run in WSL: python3 scripts/dynamic_stops.py
+任何一档触发 → 全清 (反马丁不分批退场)。
+HWM = 自买入日起的最高收盘价 (取自 history.csv)。
+止损价单调递增，不允许下移。
+
+Persists `current_stop_price` 和 `hwm_price` 到 my_holdings.json。
 """
 import json
 from pathlib import Path
@@ -18,6 +20,7 @@ HOLDINGS = ROOT / "data" / "my_holdings.json"
 SEED_HOLDINGS = ROOT / "data_seed" / "my_holdings.json"
 PRICES = ROOT / "data" / "prices.json"
 SIGNALS = ROOT / "data" / "signals.json"
+HISTORY_CSV = ROOT / "data" / "history.csv"
 
 
 def latest_price(t, prices, signals):
@@ -37,63 +40,124 @@ def latest_price(t, prices, signals):
     return px, sma20
 
 
-def compute_stop(h, current_price, sma20):
-    """Return (new_stop, ratchet_label) for the holding."""
+def hwm_per_ticker(holdings):
+    """读 history.csv 算每只持仓自买入日起的最高收盘价 (high-water mark)."""
+    out = {}
+    if not HISTORY_CSV.exists():
+        return out
+    try:
+        import csv
+        rows_by_t = {}
+        with HISTORY_CSV.open(encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                t = row.get("ticker")
+                if t not in holdings:
+                    continue
+                d = row.get("date") or ""
+                try:
+                    c = float(row.get("close") or 0)
+                except ValueError:
+                    continue
+                rows_by_t.setdefault(t, []).append((d, c))
+        for t, h in holdings.items():
+            buy_date = h.get("buy_date", "")
+            arr = rows_by_t.get(t, [])
+            since = [c for d, c in arr if d >= buy_date]
+            if since:
+                out[t] = max(since)
+    except Exception as exc:
+        print(f"  hwm calc failed: {exc}")
+    return out
+
+
+def compute_stop(h, current_price, hwm):
+    """Return (new_stop, label, gain_pct) for the holding.
+
+    反马丁纪律: HWM 追踪止损, 不设固定止盈。
+    任何一档触发 = 全清。
+    """
     if h.get("strategy") != "anti_martingale":
-        return None, "n/a (martingale - no hard stop)"
+        return None, "n/a (martingale - 不设硬止损)", 0
+    if h.get("category") in ("etf", "external"):
+        return None, "n/a (ETF/external)", 0
 
-    # Anchor to step_1_price (first batch), NOT weighted avg
-    step1 = h.get("step_1_price") or h.get("batches", [{}])[0].get("price") or h.get("buy_price")
-    ret_pct = (current_price / step1 - 1) * 100 if step1 and current_price else 0
+    # 锚点: 优先 step_1_price (首批入场价), 否则 buy_price
+    anchor = h.get("step_1_price") or h.get("buy_price")
+    if not anchor or anchor <= 0 or not current_price:
+        return None, "missing anchor/price", 0
 
-    # Compute candidates for each tier (monotonic max)
-    initial = step1 * 0.92
-    be = step1 * 1.00
-    lock5 = step1 * 1.05
-    lock10 = step1 * 1.10
+    # 用 max(current, hwm) 防止 history.csv 比当前价滞后
+    peak = max(hwm or 0, current_price)
+    gain_pct = (current_price / anchor - 1) * 100
 
-    candidates = [initial]
-    if ret_pct >= 10: candidates.append(be)
-    if ret_pct >= 20: candidates.append(lock5)
-    if ret_pct >= 30:
-        candidates.append(lock10)
-        if sma20: candidates.append(sma20)
+    # 候选止损价 (取最大值, 单调递增)
+    candidates = [anchor * 0.92]  # 初始 -8%
 
-    # Also: never lower than previously persisted stop (high-water-mark)
+    if gain_pct >= 20:
+        candidates.append(anchor * 1.00)  # 保本
+    if gain_pct >= 50:
+        candidates.append(peak * 0.85)    # HWM -15%
+    if gain_pct >= 100:
+        candidates.append(peak * 0.80)    # HWM -20%
+
+    # 单调递增: 不允许低于已持久化的止损
     prev = h.get("current_stop_price")
     if prev:
         candidates.append(prev)
 
     new_stop = max(candidates)
 
-    # Label which ratchet tier we're in
-    if ret_pct < 10: label = f"初始 -8% (浮盈 {ret_pct:+.1f}%)"
-    elif ret_pct < 20: label = f"保本档 (浮盈 {ret_pct:+.1f}%, 等 +20%)"
-    elif ret_pct < 30: label = f"锁+5% (浮盈 {ret_pct:+.1f}%, 等 +30%)"
-    else: label = f"追踪 SMA20/+10% (浮盈 {ret_pct:+.1f}%)"
-    return round(new_stop, 2), label
+    # 标签 — 告诉用户当前处于哪一档
+    if gain_pct < 20:
+        label = f"初始 -8% 硬止损 (浮盈 {gain_pct:+.1f}%, 等 +20% 升保本)"
+    elif gain_pct < 50:
+        label = f"保本档 (浮盈 {gain_pct:+.1f}%, 等 +50% 切峰值追踪)"
+    elif gain_pct < 100:
+        label = f"峰值 -15% 追踪 (浮盈 {gain_pct:+.1f}%, 等 +100% 收紧到 -20%)"
+    else:
+        label = f"峰值 -20% 追踪 (浮盈 {gain_pct:+.1f}%, 让赢家奔跑)"
+
+    return round(new_stop, 2), label, round(gain_pct, 2)
 
 
 def main():
+    if not HOLDINGS.exists():
+        print("no holdings file")
+        return
     hh = json.loads(HOLDINGS.read_text(encoding="utf-8"))
     prices = json.loads(PRICES.read_text(encoding="utf-8")) if PRICES.exists() else {}
     signals = json.loads(SIGNALS.read_text(encoding="utf-8")) if SIGNALS.exists() else {}
+    hwm_map = hwm_per_ticker(hh)
 
     updates = []
     table = []
     for t, h in hh.items():
-        px, sma20 = latest_price(t, prices, signals)
-        if not px: continue
-        new_stop, label = compute_stop(h, px, sma20)
-        if new_stop is None: continue
+        px, _sma20 = latest_price(t, prices, signals)
+        if not px:
+            continue
+        hwm = hwm_map.get(t, px)
+        # HWM 也要单调递增
+        prev_hwm = h.get("hwm_price") or 0
+        hwm = max(hwm, prev_hwm, px)
+
+        new_stop, label, gain_pct = compute_stop(h, px, hwm)
+        if new_stop is None:
+            continue
+
         old_stop = h.get("current_stop_price")
         h["current_stop_price"] = new_stop
-        step1 = h.get("step_1_price") or h.get("buy_price")
+        h["hwm_price"] = round(hwm, 2)
+        h["stop_label"] = label
+        h["gain_pct_from_anchor"] = gain_pct
+
+        anchor = h.get("step_1_price") or h.get("buy_price")
         table.append({
             "ticker": t,
-            "step1": step1,
+            "anchor": anchor,
             "current_px": px,
-            "ret_pct": (px / step1 - 1) * 100 if step1 else 0,
+            "hwm": hwm,
+            "ret_pct": gain_pct,
             "old_stop": old_stop,
             "new_stop": new_stop,
             "label": label,
@@ -102,35 +166,30 @@ def main():
             updates.append(f"  {t}: {old_stop} → {new_stop} ({label})")
 
     HOLDINGS.write_text(json.dumps(hh, ensure_ascii=False, indent=2), encoding="utf-8")
-    SEED_HOLDINGS.write_text(json.dumps(hh, ensure_ascii=False, indent=2), encoding="utf-8")
+    if SEED_HOLDINGS.exists():
+        SEED_HOLDINGS.write_text(json.dumps(hh, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"=== Dynamic stop ratchet ({len(table)} anti-martingale holdings) ===\n")
-    print(f"{'Ticker':<8} {'Step1':>8} {'Now':>8} {'Ret':>7} {'OldStop':>9} {'NewStop':>9}  {'Status'}")
-    print("-" * 90)
+    print(f"=== 反马丁动态止损 ({len(table)} 只 anti-martingale 持仓) ===\n")
+    print(f"{'Ticker':<8} {'锚点':>8} {'现价':>8} {'峰值':>8} {'浮盈':>7} {'旧止损':>9} {'新止损':>9}  {'档位'}")
+    print("-" * 110)
     for r in table:
-        print(f"{r['ticker']:<8} ${r['step1']:>7.2f} ${r['current_px']:>7.2f} "
-              f"{r['ret_pct']:>+6.1f}% {('$'+str(r['old_stop'])) if r['old_stop'] else '   -   ':>9} "
+        print(f"{r['ticker']:<8} ${r['anchor']:>7.2f} ${r['current_px']:>7.2f} "
+              f"${r['hwm']:>7.2f} {r['ret_pct']:>+6.1f}% "
+              f"{('$'+str(r['old_stop'])) if r['old_stop'] else '   -   ':>9} "
               f"${r['new_stop']:>8.2f}  {r['label']}")
 
     if updates:
-        print(f"\nChanges ({len(updates)}):")
-        for u in updates: print(u)
+        print(f"\n变更 ({len(updates)}):")
+        for u in updates:
+            print(u)
 
-    # === Fidelity 行动表 ===
-    print(f"\n=== Fidelity OCO 更新指引 ===\n")
-    print("Anti-martingale (high_conviction): 只挂 Stop Loss")
-    print("Anti-martingale (ladder):          挂 OCO (Stop + Limit @ +30%)\n")
+    # Fidelity 行动表 — 反马丁纪律: 只挂 Stop Loss, 不挂 Take Profit
+    print(f"\n=== Fidelity 挂单指引 (反马丁: 只挂 STOP, 不设 TP) ===\n")
     for r in table:
         h = hh[r['ticker']]
-        hc = h.get("high_conviction", False)
-        tag = "🔥 high_conviction" if hc else "📊 ladder"
-        print(f"  {r['ticker']:<6} {tag}  STOP: ${r['new_stop']:.2f}", end="")
-        if not hc:
-            tp = (r['step1'] * 1.30)
-            sell_q = max(1, int(h["shares"] * 0.33))
-            print(f"   TP: ${tp:.2f}  (Sell {sell_q} 股)")
-        else:
-            print(f"   TP: 无 (骑趋势)")
+        hc = "🔥" if h.get("high_conviction") else "  "
+        print(f"  {hc} {r['ticker']:<6}  STOP ${r['new_stop']:.2f}   ← {r['label']}")
+    print(f"\n  止盈策略: 只在止损被触发时全清, 不设固定 TP — 让赢家奔跑。")
 
 
 if __name__ == "__main__":
