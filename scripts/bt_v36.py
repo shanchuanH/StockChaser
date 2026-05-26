@@ -127,17 +127,17 @@ def compute_conviction(f, u, rm):
         elif avg6m < 0: ts -= 4
     ts = max(0, min(100, ts))
 
-    # Entry Quality
+    # Entry Quality — v3.6: 反马丁友好版 (镜像 engine_v35.py)
     eq = 50
     wk = f["wk"] or 0
-    if 3 <= wk <= 8: eq += 18
-    elif 8 < wk <= 12: eq += 6
-    elif wk > 12: eq -= 8
+    if 3 <= wk <= 12: eq += 18         # 扩大区间, 12% 内都加分
+    elif wk > 12:     eq += 8           # 不再 -8
     elif 0 <= wk < 3: eq += 4
-    elif wk < -3: eq -= 12
-    if d4 > 3: eq -= 8
-    if f["sma20"] and f["close"] / f["sma20"] > 1.12: eq -= 15
-    elif f["sma20"] and f["close"] / f["sma20"] > 1.08: eq -= 7
+    elif wk < -3:     eq -= 12
+    # 突破 4W 高奖励, 不惩罚 (原 d4 > 3 扣 8 已删)
+    if d4 >= 0:    eq += 10
+    elif d4 >= -3: eq += 5
+    # 取消"距 SMA20 太远"惩罚 (原 1.08/1.12 各扣 7/15 已删)
     eq = max(0, min(100, eq))
 
     # Fundamental (v3.2 — Framework 1 downstream lag + Framework 3 new node bonus)
@@ -168,19 +168,19 @@ def regime_modifier_for(spy_close, di):
         dist_200 = 5.0
     spy_4w = (spy_close[di] / spy_close[di-21] - 1) * 100 if di >= 21 else 0
 
-    # BEAR — hard cap
+    # BEAR — v3.6 softer floor (镜像 engine_v35.py)
     if not spy_above_200:
-        if dist_200 < -10 or spy_4w < -8: return 0.20
-        if spy_4w < -3:                    return 0.30
-        return 0.50
+        if dist_200 < -15 or spy_4w < -12: return 0.40   # 原 0.20
+        if spy_4w < -5:                    return 0.50   # 原 0.30
+        return 0.60                                      # 原 0.50
 
-    # BULL — v3.5.1 restored cautious tiers from v3.4f
+    # BULL — v3.6 tiers
     if spy_above_50 and spy_4w >= 4: return 1.10
     if spy_above_50 and spy_4w >= 1: return 1.00
     if spy_above_50: return 0.90
-    if -3 <= spy_4w < 0: return 0.70
-    if spy_4w < -5: return 0.30          # cautious during sharp dip
-    return 0.55
+    if -3 <= spy_4w < 0: return 0.80      # 原 0.70
+    if spy_4w < -5: return 0.65           # 原 0.30
+    return 0.75                            # 原 0.55
 
 
 def regime_position_scale(spy_close, di):
@@ -404,18 +404,18 @@ def run():
         s5_basket = []
         total_alloc = 0.0
         max_alloc = 0.85
-        # v3.2 tightened thresholds matching engine_v32 (STRONG_BUY 85 / BUY 72 / TRY_BUY 58)
+        # v3.6 thresholds: STRONG_BUY 82 / BUY 70 / TRY_BUY 55 (镜像 engine_v35.py)
         for t, cv, lk in s5_cands:
             if len(s5_basket) >= TOP_N_S5 or total_alloc >= max_alloc: break
-            if cv >= 85:
+            if cv >= 82:
                 if lk in layer_strong: continue
                 layer_strong.add(lk)
                 w = 0.12
-            elif cv >= 72:
+            elif cv >= 70:
                 if layer_buy.get(lk, 0) >= 2: continue
                 layer_buy[lk] = layer_buy.get(lk, 0) + 1
                 w = 0.08
-            elif cv >= 58:
+            elif cv >= 55:
                 w = 0.04
             else:
                 continue

@@ -158,28 +158,34 @@ def trend_strength(p):
 
 
 def entry_quality(p):
+    """v3.6: 反马丁友好版 — 奖励突破和强势, 不再因"涨太多"扣分。
+
+    历史版本里这里大量负分 (week>12 扣 8, 距SMA20>12% 扣 15, 突破 4W 高扣 8),
+    导致真正强势股 (AAOI / MU / VRT 这种) 反而进不了 STRONG_BUY。
+    回测显示 S5 (有这套惩罚) +89% vs S3 (无) +670% — 这套 EQ 惩罚是负 alpha。
+    """
     s = 50
     week = p.get("week_return_pct") or 0
-    if 3 <= week <= 8: s += 18
-    elif 8 < week <= 12: s += 6
-    elif week > 12: s -= 8
+    if 3 <= week <= 12: s += 18       # 把强势区间从 3-8 扩大到 3-12
+    elif week > 12:     s += 8         # 涨更多仍加分 (不再 -8)
     elif 0 <= week < 3: s += 4
-    elif week < -3: s -= 12
+    elif week < -3:     s -= 12
     vr = p.get("vol_ratio_5_20") or 1
     if vr >= 1.4: s += 12
     elif vr >= 1.2: s += 8
     elif vr < 0.7: s -= 6
     atr = p.get("atr_pct")
     if atr is not None:
-        if atr > 7: s -= 12
-        elif atr > 5: s -= 5
+        # AI 股波动天然大 (NVDA / AAOI 经常 5-8% ATR), 阈值放宽
+        if atr > 10:    s -= 8
+        elif atr > 7:   s -= 3
         elif atr < 1.5: s -= 4
-    last = p.get("latest_price") or 0
-    sma20 = p.get("sma_20") or 0
-    if sma20 and last / sma20 > 1.12: s -= 15
-    elif sma20 and last / sma20 > 1.08: s -= 7
+    # 取消"距 SMA20 太远"的惩罚 — 反马丁的精髓就是追涨, 离均线远=强势
+    # (原来 last/sma20>1.12 扣 15, >1.08 扣 7, 已删除)
     d4 = p.get("dist_4w_high_pct") or 0
-    if d4 > 3: s -= 8
+    if d4 >= 0:       s += 10  # 突破 4W 高 — 反马丁信号, 加分
+    elif d4 >= -3:    s += 5    # 紧贴 4W 高 — 蓄势
+    # 不再因 d4 > 3 扣分
     return max(0, min(100, s))
 
 
@@ -226,30 +232,32 @@ def detect_framework_tags(u, p, comp_score, conviction):
 
 
 def regime_modifier(prices_root):
-    """v3.5: SMA200 acts as hard bull/bear cap.
+    """v3.6: 浅熊不全跑路 (地板从 0.20 抬到 0.40)。
 
-    - SPY < SMA200 (bear regime)  → max 0.50 modifier, often 0.20-0.35
-    - SPY > SMA200 (bull regime)  → SMA50 nuances normally
+    依据: 回测显示 S6 自带的 8% 累计止损已经把 MaxDD 压到 -18%,
+    再叠加 Regime 砍到 0.20 (= 80% 现金) 是过度防御 — 浅熊里短期反弹
+    时, 0.20 让所有股票变 AVOID, 你完美错过反弹 (2024 年 5/8 月经典案例)。
+
+    新地板: 0.40 (深熊 + 加速下跌) → 1.10 (强 risk-on)。
     """
     spy_above_50 = bool(prices_root.get("spy_above_sma50"))
-    # default True for back-compat when older signals.json lacks the field
     spy_above_200 = bool(prices_root.get("spy_above_sma200", True))
     spy_4w = prices_root.get("spy_4w_return_pct") or 0
     spy_dist_200 = prices_root.get("spy_dist_sma200_pct") or 0
 
-    # BEAR regime — hard cap
+    # BEAR regime — softer floor
     if not spy_above_200:
-        if spy_dist_200 < -10 or spy_4w < -8: return 0.20   # accelerating bear
-        if spy_4w < -3:                       return 0.30   # bear + falling
-        return 0.50                                          # bear but stable
+        if spy_dist_200 < -15 or spy_4w < -12: return 0.40   # 深熊 + 加速 (原 0.20)
+        if spy_4w < -5:                        return 0.50   # 中熊 (原 0.30)
+        return 0.60                                          # 浅熊但稳 (原 0.50)
 
-    # BULL regime — graded by SMA50 + momentum
+    # BULL regime — graded by SMA50 + momentum (略提)
     if spy_above_50 and spy_4w >= 4:    return 1.10
     if spy_above_50 and spy_4w >= 1:    return 1.00
     if spy_above_50:                     return 0.90
-    if -3 <= spy_4w < 0:                 return 0.75
-    if spy_4w < -5:                      return 0.55
-    return 0.65
+    if -3 <= spy_4w < 0:                 return 0.80   # 原 0.75
+    if spy_4w < -5:                      return 0.65   # 原 0.55
+    return 0.75                                         # 原 0.65
 
 
 def conviction_score(ts, eq, fc, rm):
@@ -258,13 +266,19 @@ def conviction_score(ts, eq, fc, rm):
 
 
 def map_action(conviction, ts, eq, fc):
-    if conviction >= 85 and ts >= 80 and eq >= 65:
+    """v3.6: STRONG_BUY 闸门去掉 EQ≥65 — 反马丁不应惩罚突破后的强势股。
+
+    原闸门 (Conv≥85 AND TS≥80 AND EQ≥65): AAOI Conv=92 但 EQ 被超买惩罚
+    打到 56, 永远进不了 STRONG_BUY。但 AAOI 的 6M-Mom 是全场最高 — 这是
+    典型的"惩罚强势"反向操作。
+    """
+    if conviction >= 82 and ts >= 78:    # 原 85/80, 删除 EQ 闸门
         return "STRONG_BUY"
-    if conviction >= 72 and ts >= 70:
+    if conviction >= 70 and ts >= 65:    # 原 72/70
         return "BUY"
-    if conviction >= 58:
+    if conviction >= 55:                  # 原 58
         return "TRY_BUY"
-    if conviction >= 42:
+    if conviction >= 40:                  # 原 42
         return "WATCH"
     return "AVOID"
 
@@ -321,36 +335,54 @@ def apply_per_layer_cap(rows):
 
 
 def apply_priority_rank(rows, prev_priority_set=None):
-    """Assign PRIORITY ranks with optional hysteresis from prior run.
+    """v3.6: Priority 池子扩大到 BUY+, 排序键改 6M-Mom DESC (原: conv DESC)。
 
-    If a ticker was in last week's PRIORITY and its action is still BUY+ AND
-    conviction >= PRIORITY_EXIT_THRESHOLD (60), keep it in PRIORITY ahead of
-    fresh STRONG_BUY candidates. This dampens week-to-week churn.
+    依据: S2 (单纯 6M-Mom Top 3) +589% / S6 (6M-Mom × Conv) Sharpe 2.30 都说明
+    6 月月均动量是这套体系的 alpha 王。原版按 conv 排, 而 conv 又被 regime 砍过,
+    导致 PRIORITY 选不到真正的领涨股 (AAOI/MU/VRT 进不去, 反而是 CSCO/AMAT 这种
+    "稳健" 票占满)。
+
+    新规则:
+      池子 = STRONG_BUY ∪ BUY (原: STRONG_BUY only)
+            ∪ (prev_priority 还在 BUY+ AND conv >= 60)   # 保留 hysteresis
+      排序 = sticky 优先, 然后组内按 avg_monthly_6m_pct DESC (fallback: conv)
     """
-    PRIORITY_EXIT_CONV = 60  # held priority kept while conv >= this
+    PRIORITY_EXIT_CONV = 60
     prev_priority_set = prev_priority_set or set()
-    # Eligible pool: STRONG_BUY ∪ (prev_priority still BUY+ with conv >= exit)
+
+    STICKY_BONUS = 2.0  # sticky 给 +2pp/月 动量加成 (软 hysteresis)
+
+    def _mom_key(r, is_sticky):
+        # 排序键: 6M-Mom DESC (+ sticky 加成); ties: Conv DESC
+        mom = r.get("avg_monthly_6m_pct") or 0
+        if is_sticky:
+            mom += STICKY_BONUS
+        return (-mom, -r.get("conviction_score", 0))
+
     eligible = []
     seen = set()
-    # Start with prior priority tickers that still qualify (sticky)
+    # 1) 老的 priority (sticky) — 仍在 BUY+ 且 conv >= 60
     for r in rows:
         if r["ticker"] in prev_priority_set \
                 and r["action"] in ("STRONG_BUY", "BUY") \
                 and r["conviction_score"] >= PRIORITY_EXIT_CONV:
             eligible.append((r, True))
             seen.add(r["ticker"])
-    # Then fresh STRONG_BUY (not already in sticky)
+    # 2) 新候选: STRONG_BUY + BUY (扩大池子, 让 6M-Mom 排序生效)
     for r in rows:
-        if r["action"] == "STRONG_BUY" and r["ticker"] not in seen:
+        if r["action"] in ("STRONG_BUY", "BUY") and r["ticker"] not in seen:
             eligible.append((r, False))
             seen.add(r["ticker"])
-    # Sort sticky-first, then by conviction desc within group
-    eligible.sort(key=lambda x: (not x[1], -x[0]["conviction_score"]))
+    # 软 hysteresis: sticky 自带 +2pp 动量加成参与全局排序
+    # (高动量新人能挤掉低动量老人, 但同动量级别老人保留)
+    eligible.sort(key=lambda x: _mom_key(x[0], x[1]))
+
     for i, (r, was_priority) in enumerate(eligible, start=1):
         r["priority_rank"] = i
         r["is_priority"] = i <= PRIORITY_TOP_N
         r["priority_sticky"] = was_priority
-    # Strong_buy not in priority should still have rank
+
+    # 剩下的 STRONG_BUY 仍给 rank (即便不在 priority 也方便排序展示)
     rank = len(eligible) + 1
     for r in rows:
         if r.get("priority_rank") is None and r["action"] == "STRONG_BUY":
@@ -468,17 +500,18 @@ def main():
             "risk-off"
         ),
         "is_mock": prices.get("is_mock", False),
-        "engine_version": "v3.5",
+        "engine_version": "v3.6",
         "extra_prices": prices.get("extra_prices", {}),
         "signal_meta": SIGNAL_META,
         "action_meta": ACTION_META,
         "horizon_meta": HORIZON_META,
         "framework_meta": FRAMEWORK_META,
         "thresholds": {
-            "STRONG_BUY": 85, "BUY": 72, "TRY_BUY": 58, "WATCH": 42,
-            "strong_buy_floors": {"TS": 80, "EQ": 65},
+            "STRONG_BUY": 82, "BUY": 70, "TRY_BUY": 55, "WATCH": 40,
+            "strong_buy_floors": {"TS": 78},
             "max_strong_buy_per_layer": MAX_STRONG_BUY_PER_LAYER,
             "priority_top_n": PRIORITY_TOP_N,
+            "priority_sort_key": "avg_monthly_6m_pct (DESC), tiebreak conviction",
         },
         "portfolio_config": pb_config or {},
         "rows": rows,
@@ -495,16 +528,14 @@ def main():
     for r in rows:
         t = r["ticker"]
         series = hist.setdefault(t, [])
-        # Don't append duplicate entries on the same day
         if series and series[-1].get("date") == today:
             series[-1] = {"date": today, "conv": r["conviction_score"], "action": r["action"]}
         else:
             series.append({"date": today, "conv": r["conviction_score"], "action": r["action"]})
-        # Cap each series at 90 entries (~3 months daily, longer if weekly)
         if len(series) > 90:
             hist[t] = series[-90:]
     hist_path.write_text(json.dumps(hist, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"v3.5 wrote {len(rows)} rows -> {OUT}")
+    print(f"v3.6 wrote {len(rows)} rows -> {OUT}")
     print(f"Regime modifier: {rm}  ({out['regime_label']})")
 
     actions = Counter(r["action"] for r in rows)
