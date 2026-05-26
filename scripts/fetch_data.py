@@ -244,26 +244,23 @@ def fetch(days_back: int = 1100):
         }
 
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\nWrote prices for {len(out['tickers'])} tickers → {OUT}")
-    print(f"Saved history → {HIST}")
+    print(f"\nWrote prices for {len(out['tickers'])} tickers \u2192 {OUT}")
+    print(f"Saved history \u2192 {HIST}")
     print(f"SPY 4-week: {spy_ret_4w:+.2f}%   above SMA50: {spy_above_sma50}")
     if vix_close_val is not None:
-        zone = "平静" if vix_close_val < 18 else ("正常" if vix_close_val < 25 else
-              ("紧张" if vix_close_val < 30 else ("压力" if vix_close_val < 40 else "恐慌")))
-        print(f"VIX: {vix_close_val} ({zone}, 1y百分位 {vix_percentile_1y}%, 4w 变化 {vix_4w_change}%)")
+        zone = "\u5e73\u9759" if vix_close_val < 18 else ("\u6b63\u5e38" if vix_close_val < 25 else
+              ("\u7d27\u5f20" if vix_close_val < 30 else ("\u538b\u529b" if vix_close_val < 40 else "\u6050\u614c")))
+        print(f"VIX: {vix_close_val} ({zone}, 1y\u767e\u5206\u4f4d {vix_percentile_1y}%, 4w \u53d8\u5316 {vix_4w_change}%)"  )
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--years", type=float, default=3.0)
+    ap.add_argument("--days", type=int, default=None)
+    args = ap.parse_args()
+    days = args.days if args.days else int(args.years * 365 + 35)
+    fetch(days_back=days)
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--years", type=float, default=None,
-                    help="Years of history to fetch (default 3.0)")
-    ap.add_argument("--days", type=int, default=None,
-                    help="Override years and use exact day count")
-    args = ap.parse_args()
-    if args.days is not None:
-        n_days = args.days
-    elif args.years is not None:
-        n_days = int(args.years * 365)
-    else:
-        n_days = 1100
-    fetch(days_back=n_days)
+    main()

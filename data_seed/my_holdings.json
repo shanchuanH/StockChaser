@@ -32,9 +32,12 @@
     "dip_ladder": null,
     "high_conviction": true,
     "current_stop_price": 165.66,
-    "hwm_price": 188.28,
-    "stop_label": "初始 -8% 硬止损 (浮盈 +4.6%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": 4.57
+    "hwm_price": 223.1,
+    "stop_label": "初始 -8% 硬止损 (浮盈 +1.8%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": 1.85,
+    "peak_conv_while_held": 87.0,
+    "peak_6m_mom_while_held": 51.27,
+    "entry_6m_mom": 51.27
   },
   "AMZN": {
     "ticker": "AMZN",
@@ -70,7 +73,10 @@
         "name": "dip_3"
       }
     ],
-    "high_conviction": false
+    "high_conviction": false,
+    "peak_conv_while_held": 66.2,
+    "peak_6m_mom_while_held": 3.82,
+    "entry_6m_mom": 3.82
   },
   "ARM": {
     "ticker": "ARM",
@@ -119,11 +125,14 @@
       }
     ],
     "dip_ladder": null,
-    "current_stop_price": 194.26,
+    "current_stop_price": 270.26,
     "high_conviction": false,
-    "hwm_price": 237.3,
-    "stop_label": "初始 -8% 硬止损 (浮盈 -1.5%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": -1.53
+    "hwm_price": 317.95,
+    "stop_label": "峰值 -15% 追踪 (浮盈 +50.6%, 等 +100% 收紧到 -20%)",
+    "gain_pct_from_anchor": 50.58,
+    "peak_conv_while_held": 90.1,
+    "peak_6m_mom_while_held": 17.64,
+    "entry_6m_mom": 17.64
   },
   "GOOGL": {
     "ticker": "GOOGL",
@@ -159,7 +168,10 @@
         "name": "dip_3"
       }
     ],
-    "high_conviction": false
+    "high_conviction": false,
+    "peak_conv_while_held": 75.9,
+    "peak_6m_mom_while_held": 5.35,
+    "entry_6m_mom": 5.35
   },
   "HIMX": {
     "ticker": "HIMX",
@@ -210,9 +222,12 @@
     "dip_ladder": null,
     "current_stop_price": 17.98,
     "high_conviction": false,
-    "hwm_price": 20.65,
-    "stop_label": "初始 -8% 硬止损 (浮盈 -2.2%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": -2.2
+    "hwm_price": 21.68,
+    "stop_label": "初始 -8% 硬止损 (浮盈 +11.0%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": 10.95,
+    "peak_conv_while_held": 82.7,
+    "peak_6m_mom_while_held": 23.8,
+    "entry_6m_mom": 23.8
   },
   "LSCC": {
     "ticker": "LSCC",
@@ -263,9 +278,12 @@
     "dip_ladder": null,
     "current_stop_price": 117.01,
     "high_conviction": false,
-    "hwm_price": 128.96,
-    "stop_label": "初始 -8% 硬止损 (浮盈 -1.4%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": -1.38
+    "hwm_price": 149.64,
+    "stop_label": "初始 -8% 硬止损 (浮盈 +17.7%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": 17.65,
+    "peak_conv_while_held": 80.2,
+    "peak_6m_mom_while_held": 15.45,
+    "entry_6m_mom": 15.45
   },
   "MSFT": {
     "ticker": "MSFT",
@@ -301,7 +319,10 @@
         "name": "dip_3"
       }
     ],
-    "high_conviction": false
+    "high_conviction": false,
+    "peak_conv_while_held": 60.1,
+    "peak_6m_mom_while_held": -1.86,
+    "entry_6m_mom": -1.86
   },
   "QCOM": {
     "ticker": "QCOM",
@@ -358,9 +379,12 @@
     "dip_ladder": null,
     "current_stop_price": 203.32,
     "high_conviction": false,
-    "hwm_price": 237.53,
-    "stop_label": "初始 -8% 硬止损 (浮盈 -4.1%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": -4.12
+    "hwm_price": 246.54,
+    "stop_label": "初始 -8% 硬止损 (浮盈 +12.4%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": 12.4,
+    "peak_conv_while_held": 83.9,
+    "peak_6m_mom_while_held": 10.42,
+    "entry_6m_mom": 10.42
   },
   "VRT": {
     "ticker": "VRT",
@@ -411,9 +435,12 @@
     "dip_ladder": null,
     "current_stop_price": 316.95,
     "high_conviction": false,
-    "hwm_price": 367.92,
-    "stop_label": "初始 -8% 硬止损 (浮盈 +6.6%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": 6.57
+    "hwm_price": 376.23,
+    "stop_label": "初始 -8% 硬止损 (浮盈 -5.0%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": -5.02,
+    "peak_conv_while_held": 70.7,
+    "peak_6m_mom_while_held": 13.35,
+    "entry_6m_mom": 13.35
   },
   "DRAM": {
     "ticker": "DRAM",
@@ -464,7 +491,8 @@
         "name": "dip_3"
       }
     ],
-    "high_conviction": false
+    "high_conviction": false,
+    "peak_conv_while_held": 77.3
   },
   "QQQM": {
     "ticker": "QQQM",

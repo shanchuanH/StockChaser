@@ -1,27 +1,27 @@
 """Persistent alert engine — detects trigger events and persists them.
 
-Why this exists:
-  `daily_return_pct` is a rolling 1-day delta. If QCOM drops -13% on Monday
-  and recovers to flat on Tuesday, the original signal is gone by Tuesday
-  morning. This module captures every trigger as an immutable event so the
-  user sees "🔔 待操作: QCOM 周一暴跌 -13%" until they explicitly dismiss it.
+v3.6 alerts:
+  Hard triggers (always active):
+    flash_8        single-day ≤ -8%   → reduce to 30%
+    stop_8         cumulative ≤ -8%   → close all
+    conv_break     Conv < 45          → reduce 50%
 
-Triggers detected (per holding, per run):
-  flash_8         single-day ≤ -8%   → reduce to 30%
-  stop_8          cumulative ≤ -8%   → close all
-  conv_break      Conv < 45          → reduce 50%
+  Decay triggers (regime-gated, anti-martingale only):
+    growth_decay   6M-Mom < 1%/月 or dropped 50% from entry (≥4w held) → close all
+    conv_decay     Conv ≥20pt below peak while held (≥4w held)         → close all
+                   ↳ Black swan (VIX≥30) tightens threshold to 14pt
+    dead_money     +PnL + held ≥8w + priority_rank > 15                 → close all
+                   ↳ Disabled during black swan (avoid panic rotation)
 
-Active-list behavior (active_alerts):
-  - Filters dismissed + snoozed (original)
-  - NEW: re-validates trigger condition against latest price/Conv. If the
-    condition no longer holds (e.g. price recovered above stop_8 threshold),
-    the alert is auto-hidden — history is preserved in pending_alerts.json.
-  - NEW: de-dupes by (ticker, type) — only the most recent trigger shows.
+Regime gating:
+  rm ≥ 1.0  → all decay triggers active
+  rm 0.6-1.0 → only growth_decay + conv_decay
+  rm < 0.6  → all decay triggers OFF (let HWM stops handle it)
 
-Output: data/pending_alerts.json
-  { ticker: [ {id, type, triggered_at, trigger_price, trigger_metric,
-              action, shares_to_sell, shares_remaining, dismissed,
-              dismissed_at, snooze_until}, ... ] }
+Active-list behavior:
+  - Filter dismissed + snoozed (original)
+  - Auto-revalidate trigger conditions on read (stale alerts disappear)
+  - Dedupe by (ticker, type) — only most recent shows
 """
 from __future__ import annotations
 import json
@@ -83,6 +83,19 @@ def _hwm_per_ticker(holdings):
     return out
 
 
+def _hold_weeks(h):
+    """Floor weeks held since buy_date."""
+    bd = h.get("buy_date") or ""
+    if not bd:
+        return 0
+    try:
+        bd_dt = datetime.strptime(bd[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        days = (datetime.now(timezone.utc) - bd_dt).days
+        return max(0, days // 7)
+    except (ValueError, TypeError):
+        return 0
+
+
 def detect_and_persist():
     """Main entry — scan signals + holdings, append new alerts to PENDING."""
     sig = _load_json(SIGNALS, None)
@@ -96,6 +109,11 @@ def detect_and_persist():
     rows_by_t = {r["ticker"]: r for r in sig.get("rows", [])}
     extras = sig.get("extra_prices", {})
     today = _today_utc()
+
+    # v3.6: regime + VIX 决定衰减触发是否启用 / 是否激进
+    regime_mod = sig.get("regime_modifier") or 1.0
+    vix_close = sig.get("vix_close") or 0
+    is_black_swan = vix_close >= 30
 
     pending = _load_json(PENDING, {})
     existing_ids = set()
@@ -112,10 +130,14 @@ def detect_and_persist():
             px = r.get("latest_price")
             daily = r.get("daily_return_pct") or 0
             conv = r.get("conviction_score") or 100
+            cur_mom = r.get("avg_monthly_6m_pct")
+            pri_rank = r.get("priority_rank")
         elif extra:
             px = extra.get("latest_price")
             daily = 0
             conv = 100
+            cur_mom = None
+            pri_rank = None
         else:
             continue
         if not px:
@@ -127,6 +149,9 @@ def detect_and_persist():
         category = h.get("category")
         strategy = h.get("strategy", "anti_martingale")
         ret_pct = (px / buy - 1) * 100
+        weeks_held = _hold_weeks(h)
+        peak_conv = h.get("peak_conv_while_held") or conv
+        entry_mom = h.get("entry_6m_mom")
 
         def add_alert(typ, metric, action_label, sell_n, snooze_hr=None):
             aid = f"{t}-{today}-{typ}"
@@ -153,8 +178,7 @@ def detect_and_persist():
             existing_ids.add(aid)
 
         if strategy == "anti_martingale" and category not in ("etf", "external"):
-            # 反马丁纪律: 硬止损 + 单日暴跌 + Conviction 跌破。
-            # 不设固定止盈 — 让赢家奔跑。
+            # ===== Hard triggers — always active =====
             if daily <= -8:
                 add_alert("flash_8", f"单日 {daily:.2f}%",
                           "减至 30%（卖 70%）", int(shares * 0.7))
@@ -164,6 +188,44 @@ def detect_and_persist():
             if conv < 45:
                 add_alert("conv_break", f"Conv {conv} < 45",
                           "卖一半（基本面恶化）", int(shares / 2))
+
+            # ===== v3.6 Decay triggers — regime-gated =====
+            decay_active_full = regime_mod >= 1.0           # 强 risk-on
+            decay_active_partial = 0.6 <= regime_mod < 1.0   # 弱多头/中性
+
+            if decay_active_full or decay_active_partial:
+                # growth_decay: 6M-Mom 衰竭
+                if cur_mom is not None and weeks_held >= 4:
+                    mom_dead = cur_mom < 1.0
+                    mom_halved = (entry_mom is not None and entry_mom >= 3
+                                  and cur_mom < entry_mom * 0.5)
+                    if mom_dead or mom_halved:
+                        reason = f"6M-Mom {cur_mom:.1f}%/月"
+                        if mom_halved:
+                            reason += f" (入场 {entry_mom:.1f}%, 跌超 50%)"
+                        else:
+                            reason += " < 1%/月"
+                        add_alert("growth_decay", reason,
+                                  "全清（动量衰竭, 资金转 PRIORITY 头部）", shares)
+
+                # conv_decay: Conv 比持仓期峰值低 ≥ 20pt (黑天鹅时 14pt)
+                conv_drop_th = 14 if is_black_swan else 20
+                if weeks_held >= 4 and peak_conv - conv >= conv_drop_th:
+                    drop = peak_conv - conv
+                    bs_tag = " ⚡黑天鹅加速" if is_black_swan else ""
+                    add_alert("conv_decay",
+                              f"Conv {conv:.0f} ↓ 峰值 {peak_conv:.0f} (跌 {drop:.0f}pt){bs_tag}",
+                              "全清（走势衰减, 先于硬止损出场）", shares)
+
+            # dead_money: 浮盈 + 持仓≥8w + 排名跌出 top 15. 仅 risk-on, 禁黑天鹅
+            if decay_active_full and not is_black_swan:
+                rank_outside = (pri_rank is None or pri_rank > 15)
+                if weeks_held >= 8 and ret_pct > 0 and rank_outside:
+                    rank_s = f"#{pri_rank}" if pri_rank else "未入榜"
+                    add_alert("dead_money",
+                              f"持仓 {weeks_held}w +{ret_pct:.1f}% 但排名 {rank_s}",
+                              "全清（机会成本, 资金转 PRIORITY 头部）", shares)
+
         elif strategy == "martingale":
             initial_shares = h.get("peak_shares", shares) or shares
             for dip in (h.get("dip_ladder") or []):
@@ -217,6 +279,8 @@ def _current_state():
                 "price": r.get("latest_price"),
                 "daily": r.get("daily_return_pct") or 0,
                 "conv": r.get("conviction_score") or 100,
+                "mom": r.get("avg_monthly_6m_pct"),
+                "rank": r.get("priority_rank"),
                 "buy_price": h.get("buy_price") or 0,
             }
         elif extra:
@@ -224,19 +288,15 @@ def _current_state():
                 "price": extra.get("latest_price"),
                 "daily": 0,
                 "conv": 100,
+                "mom": None,
+                "rank": None,
                 "buy_price": h.get("buy_price") or 0,
             }
     return out
 
 
 def _alert_still_valid(alert, state):
-    """触发条件是否仍成立 — 不成立就视为该操作已不需要, 自动撤掉。
-
-    例:
-      stop_8 触发时累计 -10%, 现在反弹到 -3% → invalid (不需要再全清)
-      flash_8 周一暴跌 -9%, 周二 daily +2% → invalid (今日不是黑天鹅)
-      conv_break Conv=42 触发, 现在 Conv=55 → invalid (基本面回升)
-    """
+    """Re-validate trigger condition using latest data. Stale alerts auto-hide."""
     t = alert.get("ticker")
     typ = alert.get("type")
     st = state.get(t)
@@ -246,26 +306,34 @@ def _alert_still_valid(alert, state):
     buy = st["buy_price"]
     daily = st["daily"]
     conv = st["conv"]
+    mom = st.get("mom")
     ret_pct = (px / buy - 1) * 100 if buy else 0
 
     if typ == "stop_8":
-        return ret_pct <= -7  # 留 1% 缓冲避免抖动
+        return ret_pct <= -7
     if typ == "flash_8":
         return daily <= -7
     if typ == "flash_5":
         return daily <= -4
     if typ == "conv_break":
-        return conv < 50  # 留 5 点缓冲
+        return conv < 50
     if typ == "hwm_trail":
         return ret_pct <= -10
     if typ.startswith("dip_"):
         return ret_pct <= -3
+    if typ == "growth_decay":
+        return mom is None or mom < 1.5
+    if typ == "conv_decay":
+        return conv < 60
+    if typ == "dead_money":
+        return ret_pct > 0
     return True
 
 
 def active_alerts():
-    """Return alerts that are not dismissed, not snoozed, and whose
-    trigger condition STILL holds (auto-expire stale ones)."""
+    """Return alerts that are not dismissed, not snoozed, and whose trigger
+    condition STILL holds. De-dupe by (ticker,type).
+    """
     pending = _load_json(PENDING, {})
     now = datetime.now(timezone.utc)
     state = _current_state()
@@ -290,7 +358,6 @@ def active_alerts():
                 continue
             out.append(a)
 
-    # 同一 ticker+type 只保留最新触发的一条
     dedup = {}
     for a in out:
         k = (a.get("ticker"), a.get("type"))
@@ -300,8 +367,9 @@ def active_alerts():
     out = list(dedup.values())
 
     sev = {"flash_8": 0, "stop_8": 1, "flash_5": 2, "conv_break": 3,
-           "dip_3": 4, "dip_2": 5, "dip_1": 6,
-           "hwm_trail": 7, "time_stop": 8}
+           "conv_decay": 4, "growth_decay": 5, "dead_money": 6,
+           "dip_3": 7, "dip_2": 8, "dip_1": 9,
+           "hwm_trail": 10, "time_stop": 11}
     out.sort(key=lambda a: (sev.get(a.get("type"), 99), a.get("triggered_at", "")))
     if auto_expired:
         print(f"alerts: auto-expired {auto_expired} stale alerts (condition no longer holds)")

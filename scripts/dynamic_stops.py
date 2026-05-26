@@ -121,6 +121,39 @@ def compute_stop(h, current_price, hwm):
     return round(new_stop, 2), label, round(gain_pct, 2)
 
 
+def _signals_lookup(signals):
+    """Build {ticker: row_with_conv_and_mom} for fast lookup."""
+    out = {}
+    for r in (signals.get("rows") or []):
+        out[r["ticker"]] = r
+    return out
+
+
+def update_decay_peaks(h, sig_row):
+    """v3.6: 追踪持仓期间的 Conv / 6M-Mom 峰值 (单调递增) 和入场时基准。
+
+    用于 conv_decay / growth_decay 判断:
+      - peak_conv_while_held: 自买入以来 conv 的最高点
+      - peak_6m_mom_while_held: 自买入以来 6M-Mom 的最高点
+      - entry_6m_mom: 入场时的 6M-Mom (用于"跌超 50% from 入场"判断)
+    """
+    if not sig_row:
+        return
+    cur_conv = sig_row.get("conviction_score")
+    cur_mom = sig_row.get("avg_monthly_6m_pct")
+
+    if cur_conv is not None:
+        prev_pk = h.get("peak_conv_while_held") or 0
+        h["peak_conv_while_held"] = max(prev_pk, cur_conv)
+    if cur_mom is not None:
+        prev_pk = h.get("peak_6m_mom_while_held")
+        if prev_pk is None or cur_mom > prev_pk:
+            h["peak_6m_mom_while_held"] = cur_mom
+        # 第一次有 mom 数据时记下入场基准
+        if "entry_6m_mom" not in h:
+            h["entry_6m_mom"] = cur_mom
+
+
 def main():
     if not HOLDINGS.exists():
         print("no holdings file")
@@ -129,10 +162,14 @@ def main():
     prices = json.loads(PRICES.read_text(encoding="utf-8")) if PRICES.exists() else {}
     signals = json.loads(SIGNALS.read_text(encoding="utf-8")) if SIGNALS.exists() else {}
     hwm_map = hwm_per_ticker(hh)
+    sig_lookup = _signals_lookup(signals)
 
     updates = []
     table = []
     for t, h in hh.items():
+        # v3.6: 更新 conv/mom 峰值 (无论 strategy, 给 anti-mart 用)
+        update_decay_peaks(h, sig_lookup.get(t))
+
         px, _sma20 = latest_price(t, prices, signals)
         if not px:
             continue

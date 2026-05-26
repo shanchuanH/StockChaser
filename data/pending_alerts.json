@@ -29,6 +29,72 @@
       "dismissed": false,
       "dismissed_at": null,
       "snooze_until": null
+    },
+    {
+      "id": "QCOM-2026-05-26-dead_money",
+      "ticker": "QCOM",
+      "type": "dead_money",
+      "triggered_at": "2026-05-26T18:10:50Z",
+      "trigger_price": 246.54,
+      "trigger_metric": "持仓 55w +12.4% 但排名 #59",
+      "action_label": "全清（机会成本, 资金转 PRIORITY 头部）",
+      "shares_to_sell": 49,
+      "shares_remaining": 0,
+      "buy_price": 219.34,
+      "dismissed": false,
+      "dismissed_at": null,
+      "snooze_until": null
+    }
+  ],
+  "ARM": [
+    {
+      "id": "ARM-2026-05-26-dead_money",
+      "ticker": "ARM",
+      "type": "dead_money",
+      "triggered_at": "2026-05-26T18:10:50Z",
+      "trigger_price": 317.95,
+      "trigger_metric": "持仓 33w +50.6% 但排名 #37",
+      "action_label": "全清（机会成本, 资金转 PRIORITY 头部）",
+      "shares_to_sell": 20,
+      "shares_remaining": 0,
+      "buy_price": 211.15,
+      "dismissed": false,
+      "dismissed_at": null,
+      "snooze_until": null
+    }
+  ],
+  "HIMX": [
+    {
+      "id": "HIMX-2026-05-26-dead_money",
+      "ticker": "HIMX",
+      "type": "dead_money",
+      "triggered_at": "2026-05-26T18:10:50Z",
+      "trigger_price": 21.68,
+      "trigger_metric": "持仓 38w +11.0% 但排名 #19",
+      "action_label": "全清（机会成本, 资金转 PRIORITY 头部）",
+      "shares_to_sell": 500,
+      "shares_remaining": 0,
+      "buy_price": 19.54,
+      "dismissed": false,
+      "dismissed_at": null,
+      "snooze_until": null
+    }
+  ],
+  "LSCC": [
+    {
+      "id": "LSCC-2026-05-26-dead_money",
+      "ticker": "LSCC",
+      "type": "dead_money",
+      "triggered_at": "2026-05-26T18:10:50Z",
+      "trigger_price": 149.64,
+      "trigger_metric": "持仓 29w +17.7% 但排名 #42",
+      "action_label": "全清（机会成本, 资金转 PRIORITY 头部）",
+      "shares_to_sell": 20,
+      "shares_remaining": 0,
+      "buy_price": 127.19,
+      "dismissed": false,
+      "dismissed_at": null,
+      "snooze_until": null
     }
   ]
 }
