@@ -259,6 +259,9 @@ def _current_state():
     for t, h in holdings.items():
         r = rows_by_t.get(t)
         extra = extras.get(t)
+        # v3.7: 追踪 strategy/category 用于 strategy-aware stale check
+        strategy = h.get("strategy", "anti_martingale")
+        category = h.get("category")
         if r:
             out[t] = {
                 "price": r.get("latest_price"),
@@ -267,6 +270,8 @@ def _current_state():
                 "mom": r.get("avg_monthly_6m_pct"),
                 "rank": r.get("priority_rank"),
                 "buy_price": h.get("buy_price") or 0,
+                "strategy": strategy,
+                "category": category,
             }
         elif extra:
             out[t] = {
@@ -276,12 +281,21 @@ def _current_state():
                 "mom": None,
                 "rank": None,
                 "buy_price": h.get("buy_price") or 0,
+                "strategy": strategy,
+                "category": category,
             }
     return out
 
 
 # v3.7: 这些类型已经退役, active_alerts 时直接撤掉 (不再显示)
 RETIRED_TYPES = {"conv_decay", "dead_money", "hwm_trail", "time_stop", "flash_5"}
+
+# v3.7: 这些 alert 类型只对 anti_martingale 持仓有效
+# 如果 ticker 当前 strategy != anti_martingale 或 category=etf/external,
+# 这些 alert 应当自动撤掉 (避免旧 alert 在 strategy 切换后残留)
+ANTI_MART_ONLY_TYPES = {
+    "stop_8", "flash_8", "conv_break", "would_not_buy", "growth_decay",
+}
 
 
 def _alert_still_valid(alert, state):
@@ -294,6 +308,13 @@ def _alert_still_valid(alert, state):
     st = state.get(t)
     if not st or not st.get("price") or not st.get("buy_price"):
         return True
+    # Strategy-aware: anti-mart-only 类型在非 anti-mart 持仓上失效
+    # (例: MSFT 之前是 anti-mart 触发了 growth_decay, 后来改成 martingale, 旧 alert 应自动撤)
+    if typ in ANTI_MART_ONLY_TYPES:
+        if st.get("strategy") != "anti_martingale":
+            return False
+        if st.get("category") in ("etf", "external"):
+            return False
     px = st["price"]
     buy = st["buy_price"]
     daily = st["daily"]
