@@ -280,10 +280,17 @@ def _current_state():
     return out
 
 
+# v3.7: 这些类型已经退役, active_alerts 时直接撤掉 (不再显示)
+RETIRED_TYPES = {"conv_decay", "dead_money", "hwm_trail", "time_stop", "flash_5"}
+
+
 def _alert_still_valid(alert, state):
     """Re-validate trigger condition using latest data. Stale alerts auto-hide."""
-    t = alert.get("ticker")
     typ = alert.get("type")
+    # 退役类型直接判失效, 避免老 alert 占着 banner
+    if typ in RETIRED_TYPES:
+        return False
+    t = alert.get("ticker")
     st = state.get(t)
     if not st or not st.get("price") or not st.get("buy_price"):
         return True
@@ -298,24 +305,15 @@ def _alert_still_valid(alert, state):
         return ret_pct <= -7
     if typ == "flash_8":
         return daily <= -7
-    if typ == "flash_5":
-        return daily <= -4
     if typ == "conv_break":
         return conv < 50
-    if typ == "hwm_trail":
-        return ret_pct <= -10
     if typ.startswith("dip_"):
         return ret_pct <= -3
     # v3.7
     if typ == "would_not_buy":
-        return conv < 58  # 3pt buffer above TRY_BUY (55) — recovered if Conv ≥ 58
+        return conv < 58  # 3pt buffer above TRY_BUY (55)
     if typ == "growth_decay":
         return mom is None or mom < 1.5
-    # Legacy (v3.6 retired) — keep validity check for backward compat
-    if typ == "conv_decay":
-        return conv < 60
-    if typ == "dead_money":
-        return ret_pct > 0
     return True
 
 
@@ -347,6 +345,12 @@ def active_alerts():
                 continue
             out.append(a)
 
+    # 严重度表 (越小越紧急)
+    sev = {"flash_8": 0, "stop_8": 1, "conv_break": 3,
+           "would_not_buy": 4, "growth_decay": 5,
+           "dip_3": 7, "dip_2": 8, "dip_1": 9}
+
+    # Step 1: (ticker, type) 去重 — 保留最新触发
     dedup = {}
     for a in out:
         k = (a.get("ticker"), a.get("type"))
@@ -355,10 +359,16 @@ def active_alerts():
             dedup[k] = a
     out = list(dedup.values())
 
-    sev = {"flash_8": 0, "stop_8": 1, "flash_5": 2, "conv_break": 3,
-           "would_not_buy": 4, "growth_decay": 5, "conv_decay": 96, "dead_money": 97,
-           "dip_3": 7, "dip_2": 8, "dip_1": 9,
-           "hwm_trail": 10, "time_stop": 11}
+    # Step 2: per-ticker 严重度去重 — 同一 ticker 只保留最高严重度的一条
+    # (例: GOOGL 同时有 conv_break + 旧 dead_money, 只显示 conv_break)
+    by_ticker = {}
+    for a in out:
+        t = a.get("ticker")
+        prev = by_ticker.get(t)
+        if prev is None or sev.get(a.get("type"), 99) < sev.get(prev.get("type"), 99):
+            by_ticker[t] = a
+    out = list(by_ticker.values())
+
     out.sort(key=lambda a: (sev.get(a.get("type"), 99), a.get("triggered_at", "")))
     if auto_expired:
         print(f"alerts: auto-expired {auto_expired} stale alerts (condition no longer holds)")
