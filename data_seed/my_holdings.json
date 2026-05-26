@@ -1,14 +1,20 @@
 {
   "AAOI": {
     "ticker": "AAOI",
-    "shares": 30,
-    "buy_price": 180.06,
+    "shares": 50,
+    "buy_price": 178.98,
     "buy_date": "2025-08-01",
     "batches": [
       {
         "price": 180.06,
         "shares": 30,
         "date": "2025-08-01"
+      },
+      {
+        "price": 177.36,
+        "shares": 20,
+        "date": "2026-05-26",
+        "step": "manual"
       }
     ],
     "_imported": "from Fidelity 2026-05-11",
@@ -33,11 +39,22 @@
     "high_conviction": true,
     "current_stop_price": 165.66,
     "hwm_price": 223.1,
-    "stop_label": "初始 -8% 硬止损 (浮盈 +1.8%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": 1.85,
+    "stop_label": "初始 -8% 硬止损 (浮盈 +2.2%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": 2.25,
     "peak_conv_while_held": 87.0,
-    "peak_6m_mom_while_held": 51.27,
-    "entry_6m_mom": 51.27
+    "peak_6m_mom_while_held": 51.31,
+    "entry_6m_mom": 51.27,
+    "actions": [
+      {
+        "t": "add",
+        "step": "manual",
+        "shares": 20,
+        "price": 177.36,
+        "date": "2026-05-26",
+        "after_shares": 50
+      }
+    ],
+    "peak_shares": 50
   },
   "AMZN": {
     "ticker": "AMZN",
@@ -75,7 +92,7 @@
     ],
     "high_conviction": false,
     "peak_conv_while_held": 66.2,
-    "peak_6m_mom_while_held": 3.82,
+    "peak_6m_mom_while_held": 3.84,
     "entry_6m_mom": 3.82
   },
   "ARM": {
@@ -128,8 +145,8 @@
     "current_stop_price": 270.26,
     "high_conviction": false,
     "hwm_price": 317.95,
-    "stop_label": "峰值 -15% 追踪 (浮盈 +50.6%, 等 +100% 收紧到 -20%)",
-    "gain_pct_from_anchor": 50.58,
+    "stop_label": "峰值 -15% 追踪 (浮盈 +50.3%, 等 +100% 收紧到 -20%)",
+    "gain_pct_from_anchor": 50.35,
     "peak_conv_while_held": 90.1,
     "peak_6m_mom_while_held": 17.64,
     "entry_6m_mom": 17.64
@@ -222,11 +239,11 @@
     "dip_ladder": null,
     "current_stop_price": 17.98,
     "high_conviction": false,
-    "hwm_price": 21.68,
-    "stop_label": "初始 -8% 硬止损 (浮盈 +11.0%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": 10.95,
+    "hwm_price": 21.78,
+    "stop_label": "初始 -8% 硬止损 (浮盈 +11.4%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": 11.36,
     "peak_conv_while_held": 82.7,
-    "peak_6m_mom_while_held": 23.8,
+    "peak_6m_mom_while_held": 23.94,
     "entry_6m_mom": 23.8
   },
   "LSCC": {
@@ -278,11 +295,11 @@
     "dip_ladder": null,
     "current_stop_price": 117.01,
     "high_conviction": false,
-    "hwm_price": 149.64,
-    "stop_label": "初始 -8% 硬止损 (浮盈 +17.7%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": 17.65,
+    "hwm_price": 150.02,
+    "stop_label": "初始 -8% 硬止损 (浮盈 +17.9%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": 17.95,
     "peak_conv_while_held": 80.2,
-    "peak_6m_mom_while_held": 15.45,
+    "peak_6m_mom_while_held": 15.5,
     "entry_6m_mom": 15.45
   },
   "MSFT": {
@@ -320,8 +337,8 @@
       }
     ],
     "high_conviction": false,
-    "peak_conv_while_held": 60.1,
-    "peak_6m_mom_while_held": -1.86,
+    "peak_conv_while_held": 63.6,
+    "peak_6m_mom_while_held": -1.84,
     "entry_6m_mom": -1.86
   },
   "QCOM": {
@@ -380,8 +397,8 @@
     "current_stop_price": 203.32,
     "high_conviction": false,
     "hwm_price": 246.54,
-    "stop_label": "初始 -8% 硬止损 (浮盈 +12.4%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": 12.4,
+    "stop_label": "初始 -8% 硬止损 (浮盈 +12.2%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": 12.2,
     "peak_conv_while_held": 83.9,
     "peak_6m_mom_while_held": 10.42,
     "entry_6m_mom": 10.42
@@ -436,8 +453,8 @@
     "current_stop_price": 316.95,
     "high_conviction": false,
     "hwm_price": 376.23,
-    "stop_label": "初始 -8% 硬止损 (浮盈 -5.0%, 等 +20% 升保本)",
-    "gain_pct_from_anchor": -5.02,
+    "stop_label": "初始 -8% 硬止损 (浮盈 -5.7%, 等 +20% 升保本)",
+    "gain_pct_from_anchor": -5.71,
     "peak_conv_while_held": 70.7,
     "peak_6m_mom_while_held": 13.35,
     "entry_6m_mom": 13.35
@@ -645,5 +662,33 @@
       }
     ],
     "high_conviction": false
+  },
+  "DXYZ": {
+    "ticker": "DXYZ",
+    "name": "Destiny Tech100 (私有科技 CEF)",
+    "shares": 70,
+    "buy_price": 53.03,
+    "buy_date": "2026-05-26",
+    "batches": [
+      {
+        "price": 53.03,
+        "shares": 70,
+        "date": "2026-05-26",
+        "step": "manual"
+      }
+    ],
+    "peak_shares": 70,
+    "category": "external",
+    "strategy": "buy_hold",
+    "actions": [
+      {
+        "t": "buy",
+        "step": "manual",
+        "shares": 70,
+        "price": 53.03,
+        "date": "2026-05-26",
+        "after_shares": 70
+      }
+    ]
   }
 }

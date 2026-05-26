@@ -1,27 +1,26 @@
 """Persistent alert engine — detects trigger events and persists them.
 
-v3.6 alerts:
-  Hard triggers (always active):
-    flash_8        single-day ≤ -8%   → reduce to 30%
-    stop_8         cumulative ≤ -8%   → close all
-    conv_break     Conv < 45          → reduce 50%
+v3.7 alerts (out-going principle: "if I wouldn't buy this as a new buyer, sell"):
+  Hard triggers (always active, anti-martingale holdings):
+    flash_8        single-day return  -8%  -> reduce to 30%
+    stop_8         cumulative  -8%         -> close all
+    conv_break     Conv  <  45              -> reduce 50%
+    would_not_buy  action in (WATCH, AVOID) and held >=2w -> close all
+                   (Conv  <  55 = would not initiate new position today)
 
   Decay triggers (regime-gated, anti-martingale only):
-    growth_decay   6M-Mom < 1%/月 or dropped 50% from entry (≥4w held) → close all
-    conv_decay     Conv ≥20pt below peak while held (≥4w held)         → close all
-                   ↳ Black swan (VIX≥30) tightens threshold to 14pt
-    dead_money     +PnL + held ≥8w + priority_rank > 15                 → close all
-                   ↳ Disabled during black swan (avoid panic rotation)
+    growth_decay   6M-Mom  <  1%/mo or dropped 50% from entry (>=4w held) -> close all
 
 Regime gating:
-  rm ≥ 1.0  → all decay triggers active
-  rm 0.6-1.0 → only growth_decay + conv_decay
-  rm < 0.6  → all decay triggers OFF (let HWM stops handle it)
+  rm >= 1.0  -> all triggers active
+  rm 0.6-1.0 -> growth_decay still active (it is the "you would not buy" detector for momentum)
+  rm  <  0.6  -> all decay triggers off (HWM stops + base regime sizing handle it)
+  Hard triggers and would_not_buy are NEVER gated (absolute rules).
 
 Active-list behavior:
-  - Filter dismissed + snoozed (original)
+  - Filter dismissed + snoozed
   - Auto-revalidate trigger conditions on read (stale alerts disappear)
-  - Dedupe by (ticker, type) — only most recent shows
+  - Dedupe by (ticker, type) - only most recent shows
 """
 from __future__ import annotations
 import json
@@ -188,13 +187,17 @@ def detect_and_persist():
             if conv < 45:
                 add_alert("conv_break", f"Conv {conv} < 45",
                           "卖一半（基本面恶化）", int(shares / 2))
+            # ===== v3.7: would_not_buy (absolute rule, ungated) =====
+            # 卖出原则: "如果我是新买家不会买这只 → 卖"
+            # action ∈ {WATCH, AVOID} 等价于 Conv < TRY_BUY 阈值 (55)
+            if weeks_held >= 2 and r and r.get("action") in ("WATCH", "AVOID"):
+                add_alert("would_not_buy",
+                          f"Conv {conv:.0f}, action={r.get('action')} (新买家不会买)",
+                          "全清（不再值得持有, 该资金转 PRIORITY 头部）", shares)
 
-            # ===== v3.6 Decay triggers — regime-gated =====
-            decay_active_full = regime_mod >= 1.0           # 强 risk-on
-            decay_active_partial = 0.6 <= regime_mod < 1.0   # 弱多头/中性
-
-            if decay_active_full or decay_active_partial:
-                # growth_decay: 6M-Mom 衰竭
+            # ===== v3.6 Decay trigger: growth_decay (regime-gated) =====
+            decay_active = regime_mod >= 0.6   # 浅熊以上都开
+            if decay_active:
                 if cur_mom is not None and weeks_held >= 4:
                     mom_dead = cur_mom < 1.0
                     mom_halved = (entry_mom is not None and entry_mom >= 3
@@ -207,24 +210,6 @@ def detect_and_persist():
                             reason += " < 1%/月"
                         add_alert("growth_decay", reason,
                                   "全清（动量衰竭, 资金转 PRIORITY 头部）", shares)
-
-                # conv_decay: Conv 比持仓期峰值低 ≥ 20pt (黑天鹅时 14pt)
-                conv_drop_th = 14 if is_black_swan else 20
-                if weeks_held >= 4 and peak_conv - conv >= conv_drop_th:
-                    drop = peak_conv - conv
-                    bs_tag = " ⚡黑天鹅加速" if is_black_swan else ""
-                    add_alert("conv_decay",
-                              f"Conv {conv:.0f} ↓ 峰值 {peak_conv:.0f} (跌 {drop:.0f}pt){bs_tag}",
-                              "全清（走势衰减, 先于硬止损出场）", shares)
-
-            # dead_money: 浮盈 + 持仓≥8w + 排名跌出 top 15. 仅 risk-on, 禁黑天鹅
-            if decay_active_full and not is_black_swan:
-                rank_outside = (pri_rank is None or pri_rank > 15)
-                if weeks_held >= 8 and ret_pct > 0 and rank_outside:
-                    rank_s = f"#{pri_rank}" if pri_rank else "未入榜"
-                    add_alert("dead_money",
-                              f"持仓 {weeks_held}w +{ret_pct:.1f}% 但排名 {rank_s}",
-                              "全清（机会成本, 资金转 PRIORITY 头部）", shares)
 
         elif strategy == "martingale":
             initial_shares = h.get("peak_shares", shares) or shares
@@ -321,8 +306,12 @@ def _alert_still_valid(alert, state):
         return ret_pct <= -10
     if typ.startswith("dip_"):
         return ret_pct <= -3
+    # v3.7
+    if typ == "would_not_buy":
+        return conv < 58  # 3pt buffer above TRY_BUY (55) — recovered if Conv ≥ 58
     if typ == "growth_decay":
         return mom is None or mom < 1.5
+    # Legacy (v3.6 retired) — keep validity check for backward compat
     if typ == "conv_decay":
         return conv < 60
     if typ == "dead_money":
@@ -367,7 +356,7 @@ def active_alerts():
     out = list(dedup.values())
 
     sev = {"flash_8": 0, "stop_8": 1, "flash_5": 2, "conv_break": 3,
-           "conv_decay": 4, "growth_decay": 5, "dead_money": 6,
+           "would_not_buy": 4, "growth_decay": 5, "conv_decay": 96, "dead_money": 97,
            "dip_3": 7, "dip_2": 8, "dip_1": 9,
            "hwm_trail": 10, "time_stop": 11}
     out.sort(key=lambda a: (sev.get(a.get("type"), 99), a.get("triggered_at", "")))

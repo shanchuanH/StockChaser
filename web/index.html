@@ -83,9 +83,17 @@ tr.detail td{background:#0d1218;padding:14px 20px;border-bottom:2px solid var(--
 <div id="mock-banner" class="mock-banner" style="display:none">⚠️ MOCK 数据。生产用 <code>python serve.py</code></div>
 <div id="crash-banner" style="display:none;background:linear-gradient(90deg,#d63031,#ff6b6b);color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:700;border-bottom:2px solid #ff4757"></div>
 <div id="stale-banner" style="display:none;background:#f39c12;color:#000;text-align:center;padding:6px;font-size:12px;font-weight:700"></div>
-<div id="pending-alerts" style="display:none;background:#1a0e10;border-bottom:2px solid #d63031;padding:10px 16px"></div>
+<div id="pending-alerts" style="display:none;padding:10px 16px;position:relative"></div>
+<style>
+@keyframes pulse-glow{0%,100%{box-shadow:0 0 0 0 rgba(255,71,87,0.7)}50%{box-shadow:0 0 0 6px rgba(255,71,87,0)}}
+.alert-card-urgent{animation:pulse-glow 2s infinite}
+.alert-count-badge{display:inline-block;color:#fff;border-radius:50%;min-width:18px;height:18px;line-height:18px;text-align:center;font-size:10px;font-weight:700;margin-left:4px;padding:0 5px}
+.alert-count-badge.urgent{background:#ff4757;animation:pulse-glow 2s infinite}
+.alert-count-badge.mid{background:#f39c12}
+.alert-count-badge.soft{background:#9bd5ff;color:#000}
+</style>
 <div class="view-tabs">
-  <button class="view-tab active" data-view="dashboard">📊 实时看板</button>
+  <button class="view-tab active" data-view="dashboard">📊 实时看板<span id="vt-alert-count" style="display:none" class="alert-count-badge">0</span></button>
   <button class="view-tab" data-view="backtest">📈 策略回测</button>
   <button class="view-tab" data-view="portfolio">💼 我的持仓 <span id="vt-portfolio-count" style="background:#3fb950;color:#000;padding:1px 6px;border-radius:8px;font-size:10px;margin-left:4px">0</span></button>
 </div>
@@ -243,35 +251,83 @@ function renderPendingAlerts(){
     return;
   }
   const typeMeta = {
-    flash_8:      {emoji:"🚨", color:"#d63031", label:"单日暴跌 ≤-8% (黑天鹅)"},
-    stop_8:       {emoji:"🛑", color:"#d63031", label:"累计止损 -8%"},
-    conv_break:   {emoji:"🔻", color:"#f39c12", label:"Conv 跌破 45"},
-    // v3.6 衰减触发 (regime-gated)
-    conv_decay:   {emoji:"📉", color:"#f39c12", label:"Conv 衰减 (峰值 -20pt)"},
-    growth_decay: {emoji:"🍂", color:"#ffa500", label:"动量衰竭 (6M-Mom 失速)"},
-    dead_money:   {emoji:"🔄", color:"#9bd5ff", label:"机会成本轮仓 (浮盈+排名跌出)"},
-    // Legacy types kept for backwards compat with old pending_alerts.json entries.
-    flash_5:      {emoji:"⚠️", color:"#8b949e", label:"(已弃用) 单日跌 ≤-5%"},
-    hwm_trail:    {emoji:"📉", color:"#8b949e", label:"(已弃用) 高水位回撤"},
-    time_stop:    {emoji:"⏰", color:"#8b949e", label:"(已弃用) 时间止损"},
+    flash_8:       {emoji:"🚨", color:"#d63031", label:"单日暴跌 ≤-8% (黑天鹅)"},
+    stop_8:        {emoji:"🛑", color:"#d63031", label:"累计止损 -8%"},
+    conv_break:    {emoji:"🔻", color:"#f39c12", label:"Conv 跌破 45"},
+    // v3.7 出场原则
+    would_not_buy: {emoji:"👋", color:"#f39c12", label:"新买家不会买 (action ≤ WATCH)"},
+    growth_decay:  {emoji:"🍂", color:"#ffa500", label:"动量衰竭 (6M-Mom 失速)"},
+    // Legacy types kept for backwards compat with old pending_alerts.json entries
+    conv_decay:    {emoji:"📉", color:"#8b949e", label:"(已弃用) Conv 衰减"},
+    dead_money:    {emoji:"🔄", color:"#8b949e", label:"(已弃用) 机会成本轮仓"},
+    flash_5:       {emoji:"⚠️", color:"#8b949e", label:"(已弃用) 单日跌 ≤-5%"},
+    hwm_trail:     {emoji:"📉", color:"#8b949e", label:"(已弃用) 高水位回撤"},
+    time_stop:     {emoji:"⏰", color:"#8b949e", label:"(已弃用) 时间止损"},
   };
-  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:700;color:#ff6b6b;font-size:14px">🔔 需要你操作 ('+_pendingAlerts.length+')</div><div style="color:#8b949e;font-size:10.5px">触发条件回升后会自动消失，不需要手动撤</div></div>';
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:8px">';
+  // 分类: urgent / mid / soft — 决定颜色和动画
+  // v3.7: would_not_buy 和 growth_decay 是 mid (不再有 soft 类型)
+  const URGENT_TYPES = new Set(["flash_8","stop_8","conv_break","flash_5"]);
+  const MID_TYPES = new Set(["would_not_buy","growth_decay","conv_decay"]);
+  const SOFT_TYPES = new Set(["dead_money"]); // legacy only
+  const urgentCount = _pendingAlerts.filter(a=>URGENT_TYPES.has(a.type)).length;
+  const softCount = _pendingAlerts.filter(a=>SOFT_TYPES.has(a.type)).length;
+  const midCount = _pendingAlerts.length - urgentCount - softCount;
+  // 顶级紧急度决定 banner 边框颜色
+  const topLevel = urgentCount > 0 ? "urgent" : (midCount > 0 ? "mid" : "soft");
+  const bannerColor = topLevel === "urgent" ? "#ff4757" : (topLevel === "mid" ? "#f39c12" : "#9bd5ff");
+  const bannerBg = topLevel === "urgent" ? "linear-gradient(135deg,#2a0a10,#1a0e10)"
+                  : (topLevel === "mid" ? "linear-gradient(135deg,#2a1f0a,#1a1610)"
+                  : "linear-gradient(135deg,#0f1820,#141a20)");
+  box.style.background = bannerBg;
+  box.style.borderTop = "2px solid " + bannerColor;
+  box.style.borderBottom = "2px solid " + bannerColor;
+
+  // tab 角标
+  const vtBadge = document.getElementById("vt-alert-count");
+  if(vtBadge){
+    if(_pendingAlerts.length > 0){
+      vtBadge.textContent = _pendingAlerts.length;
+      vtBadge.style.display = "inline-block";
+      vtBadge.className = "alert-count-badge " + topLevel;
+    } else {
+      vtBadge.style.display = "none";
+    }
+  }
+
+  // 紧凑 banner 头部 — 一行搞定
+  let subParts = [];
+  if(urgentCount > 0) subParts.push('<span style="color:#ff4757">🚨'+urgentCount+'</span>');
+  if(midCount > 0) subParts.push('<span style="color:#f39c12">⚠️'+midCount+'</span>');
+  if(softCount > 0) subParts.push('<span style="color:#9bd5ff">🔄'+softCount+'</span>');
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px">';
+  html += '<div><strong style="color:'+bannerColor+';font-size:14px">🔔 需要你操作</strong> <span style="color:#8b949e;margin-left:6px">'+subParts.join(' · ')+'</span></div>';
+  html += '<div style="color:#8b949e;font-size:10.5px">条件回升后自动消失 · 软提示可点 ⏸ 1w 推迟</div></div>';
+
+  // 卡片紧凑模式: 软提示 4 列, 紧急/中级 3 列
+  const minCard = topLevel === "soft" ? 320 : 380;
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax('+minCard+'px,1fr));gap:8px">';
   for(const a of _pendingAlerts){
     const m = typeMeta[a.type] || {emoji:"❗", color:"#8b949e", label:a.type};
     const t = new Date(a.triggered_at).toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
-    html += '<div style="background:#21262d;border-left:4px solid '+m.color+';border-radius:5px;padding:8px 10px;font-size:11.5px;color:#c9d1d9">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">';
-    html += '<div><strong style="color:'+m.color+';font-size:13px">'+m.emoji+' '+a.ticker+' — '+m.label+'</strong>';
-    html += '<div style="color:#8b949e;font-size:10px;margin-top:1px">触发于 '+t+'  ·  '+a.trigger_metric+'</div></div>';
-    html += '<div style="text-align:right;color:#8b949e;font-size:10px">触发价 $'+(a.trigger_price||0).toFixed(2)+'</div></div>';
-    html += '<div style="background:'+m.color+'22;padding:6px 8px;border-radius:4px;margin-top:4px"><strong>→ '+a.action_label+'</strong>';
-    if(a.shares_to_sell > 0) html += '：卖 '+a.shares_to_sell+' 股，剩 '+a.shares_remaining+' 股';
+    const isUrgent = URGENT_TYPES.has(a.type);
+    // 只有 urgent 卡片有脉动, soft/mid 静态
+    const animClass = isUrgent ? "alert-card-urgent" : "";
+    html += '<div class="'+animClass+'" style="background:#1a1f26;border:1px solid '+m.color+'55;border-left:3px solid '+m.color+';border-radius:5px;padding:8px 11px;font-size:11.5px;color:#c9d1d9">';
+    // 行 1: ticker + label + 时间 — 全在一行
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">';
+    html += '<div><span style="font-size:16px;font-weight:700;color:'+m.color+'">'+m.emoji+' '+a.ticker+'</span><span style="margin-left:6px;font-size:10.5px;color:'+m.color+';opacity:0.9">'+m.label+'</span></div>';
+    html += '<span style="color:#8b949e;font-size:9.5px">'+t+'</span>';
     html += '</div>';
-    html += '<div style="margin-top:6px;display:flex;gap:5px">';
+    // 行 2: 触发 + 操作 — 紧凑
+    html += '<div style="font-size:10.5px;color:#8b949e;margin-bottom:5px">'+a.trigger_metric+(a.trigger_price?'  ·  $'+(a.trigger_price).toFixed(2):'')+'</div>';
+    html += '<div style="background:'+m.color+'18;border-left:2px solid '+m.color+';padding:5px 8px;border-radius:3px;margin-bottom:6px;font-size:11.5px"><strong style="color:'+m.color+'">→ '+a.action_label+'</strong>';
+    if(a.shares_to_sell > 0) html += '<span style="color:#8b949e;margin-left:4px">(卖 '+a.shares_to_sell+' 股)</span>';
+    html += '</div>';
+    // 按钮 — 缩小
+    html += '<div style="display:flex;gap:4px">';
     html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',null)" style="flex:2;background:#3fb950;color:#000;border:none;padding:5px;border-radius:3px;font-size:11px;font-weight:600;cursor:pointer">✅ 已操作</button>';
-    html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',24)" style="flex:1;background:#444;color:#c9d1d9;border:none;padding:5px;border-radius:3px;font-size:11px;cursor:pointer">⏸ 24h</button>';
-    html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',168)" style="flex:1;background:#333;color:#8b949e;border:none;padding:5px;border-radius:3px;font-size:11px;cursor:pointer">⏸ 1w</button>';
+    html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',24)" style="flex:1;background:#3a3a3a;color:#c9d1d9;border:none;padding:5px;border-radius:3px;font-size:10.5px;cursor:pointer">⏸24h</button>';
+    html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',168)" style="flex:1;background:#2a2a2a;color:#8b949e;border:none;padding:5px;border-radius:3px;font-size:10.5px;cursor:pointer">⏸1w</button>';
     html += '</div></div>';
   }
   html += '</div>';
@@ -1017,23 +1073,26 @@ function renderPortfolioView(){
   const _rm = (data && data.regime_modifier) || 1.0;
   const _vix = (data && data.vix_close) || 0;
   const _isBs = _vix >= 30;
-  const _decayFull = _rm >= 1.0;
-  const _decayPartial = _rm >= 0.6 && _rm < 1.0;
+  const _decayActive = _rm >= 0.6;
   html+='<div id="discipline-card" style="background:linear-gradient(135deg,#0f1f2e,#1a1f26);border:1px solid #3a6ea5;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:11.5px">';
-  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong style="color:#9bd5ff;font-size:13px">📜 反马丁纪律速查 — 截断左尾, 放任右尾</strong><span style="color:#8b949e;font-size:10px">当前 Regime ×'+_rm+' · VIX '+_vix.toFixed(1)+(_isBs?' ⚡黑天鹅':'')+'</span></div>';
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong style="color:#9bd5ff;font-size:13px">📜 反马丁纪律 — 出场原则: "今天我作为新买家, 不会买这只 → 卖"</strong><span style="color:#8b949e;font-size:10px">当前 Regime ×'+_rm+' · VIX '+_vix.toFixed(1)+(_isBs?' ⚡黑天鹅':'')+'</span></div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">';
   html+='<div><div style="color:#3fb950;font-weight:600;margin-bottom:4px">🛡 追踪止损 (硬触发, 任 regime)</div>';
   html+='<div style="color:#c9d1d9;line-height:1.7">• 浮盈 &lt; +20% → 入场 -8%<br>• 浮盈 ≥ +20% → 升保本<br>• 浮盈 ≥ +50% → 峰值 -15%<br>• 浮盈 ≥ +100% → 峰值 -20%</div></div>';
-  html+='<div><div style="color:#ff6b6b;font-weight:600;margin-bottom:4px">⚡ 机械防御 (硬触发)</div>';
-  html+='<div style="color:#c9d1d9;line-height:1.7">• 单日 ≤ -8% → 减至 30%<br>• Conv &lt; 45 → 减半<br>• 任一止损档 → 全清</div></div>';
-  html+='<div><div style="color:#ffa500;font-weight:600;margin-bottom:4px">🔄 衰减/轮仓 (regime-gated)</div>';
+  html+='<div><div style="color:#ff6b6b;font-weight:600;margin-bottom:4px">⚡ 硬出场 (任 regime)</div>';
   html+='<div style="color:#c9d1d9;line-height:1.7">'
-       +'• 🍂 growth_decay '+(_decayFull||_decayPartial?'<span style="color:#3fb950">✅</span>':'<span style="color:#8b949e">⏸</span>')+'<br>'
+       +'• 🛑 累计 -8% → 全清<br>'
+       +'• 🚨 单日 ≤ -8% → 减至 30%<br>'
+       +'• 🔻 Conv &lt; 45 → 减半<br>'
+       +'• <strong style="color:#f39c12">👋 action ≤ WATCH (≥2w) → 全清</strong><br>'
+       +'&nbsp;&nbsp;<em style="color:#8b949e">"今天不会买这只"</em>'
+       +'</div></div>';
+  html+='<div><div style="color:#ffa500;font-weight:600;margin-bottom:4px">🍂 动量衰减 (regime-gated)</div>';
+  html+='<div style="color:#c9d1d9;line-height:1.7">'
+       +'• 🍂 growth_decay '+(_decayActive?'<span style="color:#3fb950">✅</span>':'<span style="color:#8b949e">⏸ rm&lt;0.6</span>')+'<br>'
        +'&nbsp;&nbsp;6M-Mom &lt;1%/月 或跌超 50% (≥4w)<br>'
-       +'• 📉 conv_decay '+(_decayFull||_decayPartial?'<span style="color:#3fb950">✅</span>':'<span style="color:#8b949e">⏸</span>')+(_isBs?' ⚡加速':'')+'<br>'
-       +'&nbsp;&nbsp;Conv 跌 '+(_isBs?'14':'20')+'pt (≥4w)<br>'
-       +'• 🔄 dead_money '+(_decayFull&&!_isBs?'<span style="color:#3fb950">✅</span>':'<span style="color:#8b949e">⏸</span>')+'<br>'
-       +'&nbsp;&nbsp;浮盈 + 排名 &gt;15 (≥8w)</div></div>';
+       +'&nbsp;&nbsp;<em style="color:#8b949e">"动量没了, 不算成长股了"</em>'
+       +'</div></div>';
   html+='</div></div>';
   // Cash card: use account_total if set, else fall back to portfolio_cash_usd
   const accountTotal = config.account_total_usd || config.portfolio_cash_usd || 20000;
@@ -1233,44 +1292,30 @@ function renderPortfolioView(){
           html+='</div>';
           // 峰值价信息 (止损价已在上方速查卡显示)
           html+='<div style="margin-top:6px;font-size:9.5px;color:#8b949e;text-align:right">峰值 $'+hwmPx.toFixed(2)+'</div>';
-          html+='<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #30363d;display:flex;justify-content:space-between;align-items:center"><strong style="color:#ff6b6b">🛡 风控触发</strong><span style="color:#8b949e;font-size:9.5px">硬触发 + 衰减触发</span></div>';
+          html+='<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #30363d;display:flex;justify-content:space-between;align-items:center"><strong style="color:#ff6b6b">🛡 风控触发</strong><span style="color:#8b949e;font-size:9.5px">硬触发 + 动量衰减</span></div>';
           html+='<div style="display:grid;grid-template-columns:auto auto 1fr auto;column-gap:8px;row-gap:3px;margin-top:3px;color:#c9d1d9">';
           const flashMark = daily_v <= -8 ? '🔴' : '⏳';
           html+='<span>'+flashMark+'</span><span class="num" style="color:#ff6b6b">单日≤-8%</span><span>今日 '+daily_v.toFixed(2)+'% → <strong>减至 30%</strong></span><span style="color:#8b949e">黑天鹅</span>';
           const convMark = convVal < 45 ? '🔴' : '⏳';
           html+='<span>'+convMark+'</span><span class="num" style="color:#f39c12">Conv&lt;45</span><span>当前 '+convVal+' → <strong>卖一半</strong></span><span style="color:#8b949e">基本面恶化</span>';
-          // v3.6 衰减触发 (持仓 dict 里有 peak_conv_while_held / peak_6m_mom_while_held)
-          const _peakConv = c.h.peak_conv_while_held || convVal;
+          // v3.7 would_not_buy (action ∈ {WATCH, AVOID}, ≥2w 持仓)
+          const _sysAction = c.r ? (c.r.action || "-") : "-";
+          const _weeksHeld = c.h.buy_date ? Math.floor((Date.now() - new Date(c.h.buy_date).getTime()) / 604800000) : 0;
+          let _wnbMark = '⏳', _wnbNote = '今天会买';
+          if (_weeksHeld < 2) { _wnbNote = '需 ≥2w'; }
+          else if (_sysAction === "WATCH" || _sysAction === "AVOID") { _wnbMark = '🔴'; _wnbNote = 'action='+_sysAction; }
+          html+='<span>'+_wnbMark+'</span><span class="num" style="color:#f39c12">👋不买</span><span>action='+_sysAction+' / Conv '+convVal+' → <strong>全清</strong></span><span style="color:#8b949e">'+_wnbNote+'</span>';
+          // v3.6 growth_decay (regime-gated, ≥4w)
           const _curMom = (c.r && c.r.avg_monthly_6m_pct);
           const _entryMom = c.h.entry_6m_mom;
-          const _weeksHeld = c.h.buy_date ? Math.floor((Date.now() - new Date(c.h.buy_date).getTime()) / 604800000) : 0;
           const _rmCur = (data && data.regime_modifier) || 1.0;
-          const _vixCur = (data && data.vix_close) || 0;
-          const _isBs = _vixCur >= 30;
           const _decayOn = _rmCur >= 0.6;
-          const _convDropTh = _isBs ? 14 : 20;
-          // growth_decay
           let _gdMark = '⏳', _gdNote = '动量衰竭 (≥4w)';
-          if (!_decayOn) { _gdMark = '⏸'; _gdNote = 'regime 关闭'; }
+          if (!_decayOn) { _gdMark = '⏸'; _gdNote = 'regime &lt; 0.6 关闭'; }
           else if (_weeksHeld < 4) { _gdNote = '需 ≥4w'; }
           else if (_curMom !== null && _curMom !== undefined && _curMom < 1) { _gdMark = '🔴'; _gdNote='6M-Mom '+_curMom.toFixed(1)+'%/月 &lt; 1%'; }
           else if (_entryMom && _curMom !== null && _curMom !== undefined && _entryMom >= 3 && _curMom < _entryMom * 0.5) { _gdMark = '🔴'; _gdNote='跌至入场 '+(_curMom/_entryMom*100).toFixed(0)+'%'; }
           html+='<span>'+_gdMark+'</span><span class="num" style="color:#ffa500">🍂动量</span><span>'+(_curMom!=null?'当前 '+_curMom.toFixed(1)+'%/月':'-')+' → <strong>全清</strong></span><span style="color:#8b949e">'+_gdNote+'</span>';
-          // conv_decay
-          let _cdMark = '⏳', _cdNote='Conv 衰减 ≥'+_convDropTh+'pt';
-          if (!_decayOn) { _cdMark = '⏸'; _cdNote = 'regime 关闭'; }
-          else if (_weeksHeld < 4) { _cdNote = '需 ≥4w'; }
-          else if (_peakConv - convVal >= _convDropTh) { _cdMark = '🔴'; _cdNote='跌 '+(_peakConv-convVal).toFixed(0)+'pt'+(_isBs?' ⚡':''); }
-          html+='<span>'+_cdMark+'</span><span class="num" style="color:#f39c12">📉Conv衰</span><span>'+convVal+' (峰 '+_peakConv.toFixed(0)+') → <strong>全清</strong></span><span style="color:#8b949e">'+_cdNote+'</span>';
-          // dead_money
-          let _dmMark = '⏳', _dmNote='机会成本';
-          const _pRank = c.r ? c.r.priority_rank : null;
-          const _rankOutside = (_pRank == null || _pRank > 15);
-          if (!_decayOn || _isBs || _rmCur < 1.0) { _dmMark = '⏸'; _dmNote = _isBs ? '黑天鹅禁用' : 'regime 关闭'; }
-          else if (_weeksHeld < 8) { _dmNote = '需 ≥8w'; }
-          else if (c.ret <= 0) { _dmNote = '亏损时不触发'; }
-          else if (_rankOutside) { _dmMark = '🔴'; _dmNote='排名 '+(_pRank?'#'+_pRank:'未入榜'); }
-          html+='<span>'+_dmMark+'</span><span class="num" style="color:#9bd5ff">🔄轮仓</span><span>+'+c.ret.toFixed(1)+'% / '+_weeksHeld+'w → <strong>全清</strong></span><span style="color:#8b949e">'+_dmNote+'</span>';
           html+='</div>';
         }
         html+='</div>';
