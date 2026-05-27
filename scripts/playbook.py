@@ -86,6 +86,9 @@ def build_playbook(row, config=None):
     cash = float(config.get("portfolio_cash_usd", 10000))
     risk_pct = float(config.get("risk_per_trade_pct", 1.5)) / 100
     max_pos_pct = float(config.get("max_position_size_pct", 20)) / 100
+    # v3.7: 实际可用现金 (engine 注入)
+    cash_available = config.get("_cash_available_usd")
+    max_single_trade_cash_pct = float(config.get("max_single_trade_cash_pct", 50)) / 100
 
     # Map action → target position size %
     action_size = {
@@ -106,6 +109,22 @@ def build_playbook(row, config=None):
 
     target_pct = round(target_pct, 4)
     total_cash = cash * target_pct
+
+    # v3.7: 现金感知封顶 — 单次新仓不超过实际现金的 max_single_trade_cash_pct (默认 50%)
+    cash_constrained = False
+    cash_usage_pct = None
+    if cash_available is not None and cash_available > 0:
+        cash_cap = cash_available * max_single_trade_cash_pct
+        if total_cash > cash_cap:
+            total_cash = cash_cap
+            cash_constrained = True
+        cash_usage_pct = round(total_cash / cash_available * 100, 1)
+    elif cash_available is not None and cash_available <= 0:
+        # 现金已耗尽 — 推荐为 0
+        total_cash = 0
+        cash_constrained = True
+        cash_usage_pct = 0
+
     total_shares = _shares(total_cash, price)
 
     # Entry plan — split target across configured batches
@@ -188,15 +207,29 @@ def build_playbook(row, config=None):
     risk_cash = total_shares * stop_distance
     risk_pct_of_portfolio = round(risk_cash / cash * 100, 2) if cash else 0
 
+    # v3.7: 现金感知摘要
+    if cash_constrained and cash_available is not None and cash_available <= 0:
+        summary = f"⚠️ 现金已耗尽 ($0 可用), 当前不建议新开仓"
+    elif cash_constrained:
+        summary = (f"⚠️ 现金受限: 推荐 ${round(total_cash,0):.0f} ({total_shares}股), "
+                   f"占现金 {cash_usage_pct:.0f}% (上限 {int(max_single_trade_cash_pct*100)}%)")
+    else:
+        summary = f"目标仓位 {round(target_pct*100,1)}% (${round(total_cash,0):.0f}/{total_shares} 股), 分 {len(batches)} 批"
+        if cash_usage_pct is not None:
+            summary += f", 占现金 {cash_usage_pct:.0f}%"
+
     return {
-        "summary": f"目标仓位 {round(target_pct*100,1)}% (${round(total_cash,0):.0f}/{total_shares} 股), 分 {len(batches)} 批",
+        "summary": summary,
         "config_snapshot": {
             "portfolio_cash_usd": cash,
             "risk_per_trade_pct": config.get("risk_per_trade_pct", 1.5),
+            "cash_available_usd": cash_available,
         },
         "target_position_pct": round(target_pct * 100, 2),
         "target_cash_usd": round(total_cash, 2),
         "target_shares": total_shares,
+        "cash_constrained": cash_constrained,
+        "cash_usage_pct": cash_usage_pct,
         "initial_stop_price": initial_stop,
         "stop_distance_atr": 1.5,
         "single_trade_risk_usd": round(risk_cash, 2),
@@ -219,15 +252,3 @@ def annotate_rows(rows, config=None):
             r["playbook"] = None
             r["playbook_error"] = str(e)
     return rows
-
-
-# Smoke test if run directly
-if __name__ == "__main__":
-    sample = {
-        "ticker": "VRT", "latest_price": 168.50, "atr_20": 4.20,
-        "action": "STRONG_BUY", "conviction_score": 96.7,
-        "high_4w": 175.30, "sma_20": 162.10, "sma_50": 155.40,
-    }
-    cfg = load_config()
-    pb = build_playbook(sample, cfg)
-    print(json.dumps(pb, ensure_ascii=False, indent=2))

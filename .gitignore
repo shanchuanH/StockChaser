@@ -24,3 +24,4 @@ AI_Chain_Watchlist.xlsx
 # Environment / secrets
 .env
 __pycache__/
+/.envrc

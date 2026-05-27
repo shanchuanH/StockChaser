@@ -73,9 +73,9 @@ tr.detail td{background:#0d1218;padding:14px 20px;border-bottom:2px solid var(--
 </head>
 <body>
 <header>
-  <h1>📊 StockChaser <span class="sub">AI链 · 追涨看板 v3.6</span><span class="regime-badge" id="regime-badge">—</span><span class="regime-badge" id="vix-badge" style="display:none;margin-left:6px">—</span></h1>
+  <h1>📊 StockChaser <span class="sub">AI链 · 追涨看板 v3.7</span><span class="regime-badge" id="regime-badge">—</span><span class="regime-badge" id="vix-badge" style="display:none;margin-left:6px">—</span></h1>
   <div class="meta" id="meta">
-    <div><span class="live-dot"></span><span id="last-updated">连接中...</span></div>
+    <div><span class="live-dot"></span><span id="last-updated">连接中...</span> &nbsp; 💰 现金 <span id="cash-available" style="font-weight:700">-</span></div>
     <div>SPY 4w: <span id="spy">-</span> &nbsp; VIX: <span id="vix">-</span> &nbsp;<button class="refresh-btn" id="refresh-btn">刷新</button></div>
   </div>
 </header>
@@ -207,6 +207,22 @@ async function loadData(){
     if(data.regime_label){
       rb.textContent=data.regime_label+" ×"+data.regime_modifier;
       rb.style.background=data.regime_modifier>=1?"rgba(63,185,80,.2)":data.regime_modifier>=0.85?"rgba(241,196,15,.15)":"rgba(214,48,49,.2)";
+    }
+    // v3.7: 现金剩余显示 (头部)
+    const cashEl = document.getElementById("cash-available");
+    if(cashEl){
+      const cash = data.cash_available_usd;
+      const totalAcc = data.account_total_usd;
+      if(cash != null && totalAcc){
+        const pct = (cash / totalAcc * 100).toFixed(1);
+        let color = "#3fb950";  // 绿: 现金充足
+        if(pct < 5) color = "#d63031";       // 红: <5% 几乎用完
+        else if(pct < 15) color = "#f39c12";  // 橙: <15% 偏紧
+        cashEl.innerHTML = '$'+Math.round(cash).toLocaleString()+' <span style="font-size:10.5px;color:#8b949e">('+pct+'%)</span>';
+        cashEl.style.color = color;
+      } else {
+        cashEl.textContent = "-";
+      }
     }
     // VIX 显示 + zone 颜色
     const vx=data.vix_close, ve=document.getElementById("vix"), vb=document.getElementById("vix-badge");
@@ -898,10 +914,20 @@ function determineNextAction(held, r){
 function renderPlaybook(r){
   const pb=r.playbook;
   if(!pb)return '<div style="padding:14px;color:#8b949e">⚪ 当前 '+(r.action||'-')+', 暂无 playbook (仅 TRY_BUY+ 生成)</div>';
-  const cash=(data.portfolio_config&&data.portfolio_config.portfolio_cash_usd)||20000;
-  let html='<div style="background:#0d1218;border:1px solid #d63031;border-radius:8px;padding:14px;margin-top:14px">';
-  html+='<h4 style="color:#ff6b6b;font-size:13px;margin-bottom:10px">📋 完整操作手册 (基于 $'+cash+')</h4>';
-  html+='<div style="background:rgba(214,48,49,0.08);padding:10px;border-radius:5px;margin-bottom:12px"><strong>'+pb.summary+'</strong><br><span style="color:#8b949e;font-size:11px">总投入 $'+pb.target_cash_usd+' · '+pb.target_shares+' 股 · 单笔风险 $'+pb.single_trade_risk_usd+' ('+pb.single_trade_risk_pct+'%)</span></div>';
+  const cashCfg=(data.portfolio_config&&data.portfolio_config.portfolio_cash_usd)||20000;
+  const cashAvail=data.cash_available_usd;
+  const cashColor = pb.cash_constrained ? "#f39c12" : "#d63031";
+  let html='<div style="background:#0d1218;border:1px solid '+cashColor+';border-radius:8px;padding:14px;margin-top:14px">';
+  // 标题: 强调"建议买 N 股 ≈ $X"
+  html+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
+  html+='<h4 style="color:'+cashColor+';font-size:14px">📋 操作手册: <strong style="font-size:18px">买 '+pb.target_shares+' 股 ≈ $'+Math.round(pb.target_cash_usd)+'</strong></h4>';
+  if(cashAvail != null){
+    html+='<span style="font-size:11px;color:#8b949e">现金 $'+Math.round(cashAvail)+(pb.cash_usage_pct!=null?' · 用 '+pb.cash_usage_pct+'%':'')+'</span>';
+  }
+  html+='</div>';
+  // 摘要 (cash_constrained 时变橙色警示)
+  const summaryBg = pb.cash_constrained ? "rgba(243,156,18,0.12)" : "rgba(214,48,49,0.08)";
+  html+='<div style="background:'+summaryBg+';padding:10px;border-radius:5px;margin-bottom:12px"><strong>'+pb.summary+'</strong><br><span style="color:#8b949e;font-size:11px">总投入 $'+pb.target_cash_usd+' · '+pb.target_shares+' 股 · 单笔风险 $'+pb.single_trade_risk_usd+' ('+pb.single_trade_risk_pct+'%)</span></div>';
   // Entry plan
   html+='<strong style="color:#3fb950">📥 建仓 (3 批递进)</strong>';
   html+='<table style="width:100%;font-size:11px;margin-top:6px"><thead><tr style="background:#1a1f26"><th style="padding:5px 8px">#</th><th style="padding:5px 8px;text-align:left">触发条件</th><th class="num" style="padding:5px 8px">价格</th><th class="num" style="padding:5px 8px">股数</th></tr></thead><tbody>';

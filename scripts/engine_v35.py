@@ -512,6 +512,25 @@ def main():
     if _annotate_playbooks is not None:
         try:
             pb_config = _load_pb_config()
+            # v3.7: 算实际可用现金 = account_total - 已投入成本
+            try:
+                holdings_path = ROOT / "data" / "my_holdings.json"
+                if holdings_path.exists():
+                    h = json.loads(holdings_path.read_text(encoding="utf-8"))
+                    total_invested = sum(
+                        (p.get("buy_price", 0) or 0) * (p.get("shares", 0) or 0)
+                        for p in h.values()
+                    )
+                else:
+                    total_invested = 0
+                account_total = (pb_config.get("account_total_usd")
+                                 or pb_config.get("portfolio_cash_usd") or 20000)
+                cash_available = max(0, account_total - total_invested)
+                pb_config["_cash_available_usd"] = round(cash_available, 2)
+                pb_config["_total_invested_usd"] = round(total_invested, 2)
+                pb_config["_account_total_usd"] = round(account_total, 2)
+            except Exception as e:
+                print(f"  ! cash_available calc failed: {e}")
             _annotate_playbooks(rows, pb_config)
         except Exception as e:
             print(f"  ! playbook generation failed: {e}")
@@ -542,7 +561,11 @@ def main():
             "risk-off"
         ),
         "is_mock": prices.get("is_mock", False),
-        "engine_version": "v3.6",
+        "engine_version": "v3.7",
+        # v3.7: 暴露实际可用现金, 给 dashboard 头部用
+        "cash_available_usd": (pb_config or {}).get("_cash_available_usd"),
+        "total_invested_usd": (pb_config or {}).get("_total_invested_usd"),
+        "account_total_usd": (pb_config or {}).get("_account_total_usd"),
         "extra_prices": prices.get("extra_prices", {}),
         "signal_meta": SIGNAL_META,
         "action_meta": ACTION_META,
