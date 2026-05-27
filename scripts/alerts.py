@@ -178,7 +178,10 @@ def detect_and_persist():
 
         if strategy == "anti_martingale" and category not in ("etf", "external"):
             # ===== Hard triggers — always active =====
-            if daily <= -8:
+            # v3.7: PRIORITY 头部 (top 8) 的 flash_8 豁免 — 高动量股的 -8% 单日
+            # 是常态波动, 不是黑天鹅. 反马丁精神: 强势股回调 = 机会, 不是危机.
+            in_priority_top = (pri_rank is not None and pri_rank <= 8)
+            if daily <= -8 and not in_priority_top:
                 add_alert("flash_8", f"单日 {daily:.2f}%",
                           "减至 30%（卖 70%）", int(shares * 0.7))
             if ret_pct <= -8:
@@ -325,6 +328,10 @@ def _alert_still_valid(alert, state):
     if typ == "stop_8":
         return ret_pct <= -7
     if typ == "flash_8":
+        # PRIORITY 头部豁免: 进 top 8 后, 历史 flash_8 自动撤
+        rank = st.get("rank")
+        if rank is not None and rank <= 8:
+            return False
         return daily <= -7
     if typ == "conv_break":
         return conv < 50
@@ -366,12 +373,10 @@ def active_alerts():
                 continue
             out.append(a)
 
-    # 严重度表 (越小越紧急)
     sev = {"flash_8": 0, "stop_8": 1, "conv_break": 3,
            "would_not_buy": 4, "growth_decay": 5,
            "dip_3": 7, "dip_2": 8, "dip_1": 9}
 
-    # Step 1: (ticker, type) 去重 — 保留最新触发
     dedup = {}
     for a in out:
         k = (a.get("ticker"), a.get("type"))
@@ -380,8 +385,6 @@ def active_alerts():
             dedup[k] = a
     out = list(dedup.values())
 
-    # Step 2: per-ticker 严重度去重 — 同一 ticker 只保留最高严重度的一条
-    # (例: GOOGL 同时有 conv_break + 旧 dead_money, 只显示 conv_break)
     by_ticker = {}
     for a in out:
         t = a.get("ticker")
@@ -392,7 +395,7 @@ def active_alerts():
 
     out.sort(key=lambda a: (sev.get(a.get("type"), 99), a.get("triggered_at", "")))
     if auto_expired:
-        print(f"alerts: auto-expired {auto_expired} stale alerts (condition no longer holds)")
+        print(f"alerts: auto-expired {auto_expired} stale alerts")
     return out
 
 
