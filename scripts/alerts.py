@@ -309,8 +309,11 @@ def _alert_still_valid(alert, state):
         return False
     t = alert.get("ticker")
     st = state.get(t)
-    if not st or not st.get("price") or not st.get("buy_price"):
-        return True
+    # v3.7 fix: 持仓里没这个 ticker = 已经卖了 = alert 已无意义, 撤
+    if not st:
+        return False
+    if not st.get("price") or not st.get("buy_price"):
+        return True  # 数据缺失但持仓还在 — 保守保留
     # Strategy-aware: anti-mart-only 类型在非 anti-mart 持仓上失效
     # (例: MSFT 之前是 anti-mart 触发了 growth_decay, 后来改成 martingale, 旧 alert 应自动撤)
     if typ in ANTI_MART_ONLY_TYPES:
