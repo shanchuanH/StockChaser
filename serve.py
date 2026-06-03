@@ -608,6 +608,15 @@ def api_portfolio_config():
         return jsonify({"ok": True, "config": cfg})
 
 
+@app.route("/api/volume_profile")
+def api_volume_profile():
+    """Return latest VP data (POC/VAH/VAL) for PRIORITY tickers."""
+    fp = DATA / "volume_profile.json"
+    if not fp.exists():
+        return jsonify({"tickers": {}})
+    return Response(fp.read_text(encoding="utf-8"), mimetype="application/json")
+
+
 @app.route("/api/conviction_history")
 def api_conviction_history():
     fp = DATA / "conviction_history.json"

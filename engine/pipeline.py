@@ -17,7 +17,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import scoring, regime, framework, action as action_mod, stops, alerts, playbook
+from . import scoring, regime, framework, action as action_mod, stops, alerts, playbook, volume_profile
 
 ENGINE_VERSION = "v3.7"
 
@@ -37,6 +37,7 @@ class Paths:
         self.pending = self.data / "pending_alerts.json"
         self.history_csv = self.data / "history.csv"
         self.conv_hist = self.data / "conviction_history.json"
+        self.volume_profile = self.data / "volume_profile.json"
 
 
 def _load_prior_priority(signals_path):
@@ -121,7 +122,7 @@ def _score_row(u, p, rm, signals_meta):
 
 # ── Main run ────────────────────────────────────────────────────────────
 
-def run(paths=None, *, run_stops=True, run_alerts=True, verbose=True):
+def run(paths=None, *, run_stops=True, run_alerts=True, run_volume_profile=True, verbose=True):
     """Full pipeline. Returns the signals dict that was written to disk."""
     paths = paths or Paths()
     universe = json.loads(paths.universe.read_text(encoding="utf-8"))
@@ -224,6 +225,18 @@ def run(paths=None, *, run_stops=True, run_alerts=True, verbose=True):
     # 7) Alert detection
     if run_alerts:
         alerts.detect_and_persist(paths.signals, paths.holdings, paths.pending)
+
+    # 8) Volume Profile for PRIORITY top 8 (informational, no scoring impact)
+    if run_volume_profile:
+        try:
+            priority_tickers = [r["ticker"] for r in rows if r.get("is_priority")]
+            if priority_tickers:
+                profiles = volume_profile.compute_profiles(priority_tickers)
+                volume_profile.save_profiles(profiles, paths.volume_profile)
+                if verbose:
+                    print(f"volume_profile: computed {len(profiles)}/{len(priority_tickers)} priority tickers")
+        except Exception as exc:
+            print(f"volume_profile error (non-fatal): {exc}")
 
     # 8) Console summary
     if verbose:

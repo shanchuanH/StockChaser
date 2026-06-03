@@ -186,6 +186,26 @@ async function _showInitStatus(){
   el.textContent="初始化中，请稍候"+dots;
 }
 
+// v3.7: Volume Profile data cache (loaded lazily)
+let _vpCache = null;
+async function loadVolumeProfile(){
+  if(_vpCache !== null) return _vpCache;
+  try{
+    const r = await fetch("/api/volume_profile?_="+Date.now());
+    if(r.ok){
+      const d = await r.json();
+      _vpCache = d.tickers || {};
+    } else {
+      _vpCache = {};
+    }
+  }catch(e){ _vpCache = {}; }
+  return _vpCache;
+}
+function vpFor(ticker){
+  if(!_vpCache) return null;
+  return _vpCache[ticker] || null;
+}
+
 async function loadData(){
   try{
     const r=await fetch(apiData+"?_="+Date.now());
@@ -241,6 +261,8 @@ async function loadData(){
     updateCrashBanner();
     updateStaleBanner();
     loadPendingAlerts();
+    // v3.7: 同步加载 Volume Profile (异步, 不阻塞主表)
+    _vpCache = null; loadVolumeProfile().then(()=>render());
     loadEntryAdvisory();updateCounts();render();
   }catch(e){
     document.getElementById("last-updated").textContent="连接失败，5s后重试…";
@@ -341,9 +363,9 @@ function renderPendingAlerts(){
     html += '</div>';
     // 按钮 — 缩小
     html += '<div style="display:flex;gap:4px">';
-    html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',null)" style="flex:2;background:#3fb950;color:#000;border:none;padding:5px;border-radius:3px;font-size:11px;font-weight:600;cursor:pointer">✅ 已操作</button>';
-    html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',24)" style="flex:1;background:#3a3a3a;color:#c9d1d9;border:none;padding:5px;border-radius:3px;font-size:10.5px;cursor:pointer">⏸24h</button>';
-    html += '<button onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',168)" style="flex:1;background:#2a2a2a;color:#8b949e;border:none;padding:5px;border-radius:3px;font-size:10.5px;cursor:pointer">⏸1w</button>';
+    html += '<button title="只清此提醒, 不卖股票. 同类提醒 7 天内不再响" onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',null)" style="flex:2;background:#3fb950;color:#000;border:none;padding:5px;border-radius:3px;font-size:11px;font-weight:600;cursor:pointer">🔕 已知晓 (不卖出)</button>';
+    html += '<button title="24 小时内不再响" onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',24)" style="flex:1;background:#3a3a3a;color:#c9d1d9;border:none;padding:5px;border-radius:3px;font-size:10.5px;cursor:pointer">⏸24h</button>';
+    html += '<button title="1 周内不再响" onclick="dismissAlert(\''+a.ticker+'\',\''+a.id+'\',168)" style="flex:1;background:#2a2a2a;color:#8b949e;border:none;padding:5px;border-radius:3px;font-size:10.5px;cursor:pointer">⏸1w</button>';
     html += '</div></div>';
   }
   html += '</div>';
@@ -1277,6 +1299,29 @@ function renderPortfolioView(){
         }
         html+='</div>';
         html+='</div>';
+
+        // ====== v3.7: 昨日 Volume Profile (POC/VAH/VAL) — 参考价位 ======
+        const vp = vpFor(c.t);
+        if(vp && vp.poc){
+          // 当前价相对 VP 三档的位置颜色提示
+          const _px = c.px;
+          let _pxZone = "📊"; let _zoneColor = "#8b949e"; let _zoneTxt = "";
+          if(_px > vp.vah){ _pxZone = "🚀"; _zoneColor = "#3fb950"; _zoneTxt = "突破 VAH"; }
+          else if(_px < vp.val){ _pxZone = "🔻"; _zoneColor = "#d63031"; _zoneTxt = "跌破 VAL"; }
+          else if(Math.abs(_px - vp.poc) / vp.poc < 0.005){ _pxZone = "🎯"; _zoneColor = "#f39c12"; _zoneTxt = "在 POC"; }
+          else if(_px > vp.poc){ _pxZone = "⬆️"; _zoneColor = "#3fb950"; _zoneTxt = "POC 上方"; }
+          else { _pxZone = "⬇️"; _zoneColor = "#f39c12"; _zoneTxt = "POC 下方"; }
+          html+='<div title="昨日 5min 成交量分布 — 70% 量集中在 VAL→VAH 区间, POC 是成交量最大价位" style="background:#0d1218;border:1px solid #21262d;border-left:3px solid '+_zoneColor+';border-radius:5px;padding:7px 10px;margin-bottom:8px;font-size:10.5px">';
+          html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+          html+='<strong style="color:#9bd5ff">📊 昨日 VP ('+vp.session_date+')</strong>';
+          html+='<span style="color:'+_zoneColor+';font-weight:700">'+_pxZone+' '+_zoneTxt+'</span>';
+          html+='</div>';
+          html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;font-size:10.5px">';
+          html+='<div style="background:#d6303122;border:1px solid #d63031;border-radius:3px;padding:4px"><div style="color:#ff6b6b;font-size:9px">VAL 支撑</div><div style="font-weight:700;font-size:12px;color:#ff6b6b">$'+vp.val.toFixed(2)+'</div></div>';
+          html+='<div style="background:#f39c1222;border:1px solid #f39c12;border-radius:3px;padding:4px"><div style="color:#f39c12;font-size:9px">POC 中枢</div><div style="font-weight:700;font-size:12px;color:#f39c12">$'+vp.poc.toFixed(2)+'</div></div>';
+          html+='<div style="background:#3fb95022;border:1px solid #3fb950;border-radius:3px;padding:4px"><div style="color:#3fb950;font-size:9px">VAH 阻力</div><div style="font-weight:700;font-size:12px;color:#3fb950">$'+vp.vah.toFixed(2)+'</div></div>';
+          html+='</div></div>';
+        }
 
         // ====== 阶梯显示 — strategy-aware __PATCH_STRATEGY_LADDER__ ======
         const buyP = c.h.buy_price;
