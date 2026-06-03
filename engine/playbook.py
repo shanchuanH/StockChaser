@@ -75,12 +75,17 @@ def build_playbook(row, config):
     max_pos_pct = float(config.get("max_position_size_pct", 20)) / 100
     cash_available = config.get("_cash_available_usd")
     max_single_trade_cash_pct = float(config.get("max_single_trade_cash_pct", 50)) / 100
+    # v3.7: regime-aware position scaling (与 backtest 同步)
+    # rm 直接来自 row 的 regime_modifier 字段 (engine pipeline 写入)
+    regime_mod = row.get("regime_modifier") or 1.0
+    pos_scale = max(regime_mod, 0.30)  # 仓位地板 30%
 
     action_size = {
         "STRONG_BUY": max_pos_pct,
         "BUY":        max_pos_pct * 0.75,
         "TRY_BUY":    max_pos_pct * 0.40,
     }.get(action, max_pos_pct * 0.40)
+    action_size *= pos_scale  # 熊市自动缩仓位
 
     stop_distance = 1.5 * atr
     if stop_distance > 0:
@@ -174,15 +179,19 @@ def build_playbook(row, config):
     risk_pct_of_portfolio = round(risk_cash / cash * 100, 2) if cash else 0
 
     # Summary
+    regime_note = ""
+    if pos_scale < 0.95:
+        regime_note = f" · ⚠️ regime ×{pos_scale:.2f} 缩仓 (熊市防御)"
     if cash_constrained and cash_available is not None and cash_available <= 0:
         summary = "⚠️ 现金已耗尽 ($0 可用), 当前不建议新开仓"
     elif cash_constrained:
         summary = (f"⚠️ 现金受限: 推荐 ${round(total_cash,0):.0f} ({total_shares}股), "
-                   f"占现金 {cash_usage_pct:.0f}% (上限 {int(max_single_trade_cash_pct*100)}%)")
+                   f"占现金 {cash_usage_pct:.0f}% (上限 {int(max_single_trade_cash_pct*100)}%)" + regime_note)
     else:
         summary = f"目标仓位 {round(target_pct*100,1)}% (${round(total_cash,0):.0f}/{total_shares} 股), 分 {len(batches)} 批"
         if cash_usage_pct is not None:
             summary += f", 占现金 {cash_usage_pct:.0f}%"
+        summary += regime_note
 
     return {
         "summary": summary,

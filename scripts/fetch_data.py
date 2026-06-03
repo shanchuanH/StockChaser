@@ -255,8 +255,12 @@ def fetch(days_back: int = 1100):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--years", type=float, default=3.0)
-    ap.add_argument("--days", type=int, default=None)
+    # v3.7: 默认拉 7 年, 覆盖 2019-2026 (含 2022 熊市)
+    # 给 dashboard 用够 3 年其实就行, 但 backtest 要看 2022 熊市 + 2020 covid 周期
+    ap.add_argument("--years", type=float, default=7.0,
+                    help="历史数据年数 (默认 7 年, dashboard 用 3 年即可, backtest 需要 5+ 年)")
+    ap.add_argument("--days", type=int, default=None,
+                    help="精确天数 (覆盖 --years)")
     args = ap.parse_args()
     days = args.days if args.days else int(args.years * 365 + 35)
     fetch(days_back=days)
