@@ -1,0 +1,218 @@
+"""Personal playbook generator — cash-aware operation manual.
+
+For each stock with action >= TRY_BUY, generates:
+  - Target position size (capped by actual available cash)
+  - 3-batch entry plan
+  - 4-step HWM trailing stop ladder
+  - Exit triggers
+
+v3.7 enhancements:
+  - Reads `_cash_available_usd` injected by pipeline (= account_total - invested)
+  - Caps single-trade cash to max_single_trade_cash_pct of available (default 50%)
+  - Emits cash_constrained / cash_usage_pct flags for UI warnings
+"""
+from __future__ import annotations
+import json
+from pathlib import Path
+
+
+DEFAULT_CONFIG = {
+    "portfolio_cash_usd": 10000,
+    "max_positions": 5,
+    "cash_buffer_pct": 25,
+    "risk_per_trade_pct": 1.5,
+    "max_position_size_pct": 20,
+    "max_single_trade_cash_pct": 50,
+    "entry_batches": [
+        {"step": 1, "weight_pct": 7, "trigger": "立即买入 (信号触发)"},
+        {"step": 2, "weight_pct": 7, "trigger": "涨 +3% 且未跌破 SMA10"},
+        {"step": 3, "weight_pct": 6, "trigger": "突破 4W 高"},
+    ],
+    "stop_ladder": [
+        {"after_gain_pct": 0,   "stop_logic": "minus_8_pct", "desc": "入场价 -8% 硬止损"},
+        {"after_gain_pct": 20,  "stop_logic": "breakeven",   "desc": "保本 (浮盈达 +20% 升档)"},
+        {"after_gain_pct": 50,  "stop_logic": "hwm_x_0.85",  "desc": "峰值 -15% 追踪"},
+        {"after_gain_pct": 100, "stop_logic": "hwm_x_0.80",  "desc": "峰值 -20% 追踪 (让赢家奔跑)"},
+    ],
+    "profit_taking": [],  # 反马丁: 不设固定止盈
+    "exit_triggers": [
+        "触发追踪止损 → 全部清仓 (任一档触发都全清)",
+        "Conviction 跌破 45 → 减半 (基本面恶化)",
+        "单日跌幅 > 8% → 减至 30% (黑天鹅机械防御)",
+        "SPY 跌破 SMA50 → 全仓减半 (大盘转熊)",
+    ],
+}
+
+
+def load_config(config_path):
+    p = Path(config_path)
+    if not p.exists():
+        return DEFAULT_CONFIG.copy()
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return DEFAULT_CONFIG.copy()
+
+
+def _shares(cash_amount, price):
+    if price <= 0:
+        return 0
+    return int(cash_amount // price)
+
+
+def build_playbook(row, config):
+    """Generate playbook for one row. Returns None if action too weak."""
+    action = row.get("action", "AVOID")
+    if action in ("AVOID", "WATCH"):
+        return None
+    price = row.get("latest_price") or 0
+    atr = row.get("atr_20") or 0
+    if price <= 0 or atr <= 0:
+        return None
+
+    cash = float(config.get("portfolio_cash_usd", 10000))
+    risk_pct = float(config.get("risk_per_trade_pct", 1.5)) / 100
+    max_pos_pct = float(config.get("max_position_size_pct", 20)) / 100
+    cash_available = config.get("_cash_available_usd")
+    max_single_trade_cash_pct = float(config.get("max_single_trade_cash_pct", 50)) / 100
+
+    action_size = {
+        "STRONG_BUY": max_pos_pct,
+        "BUY":        max_pos_pct * 0.75,
+        "TRY_BUY":    max_pos_pct * 0.40,
+    }.get(action, max_pos_pct * 0.40)
+
+    stop_distance = 1.5 * atr
+    if stop_distance > 0:
+        risk_limited_pct = risk_pct * price / stop_distance
+        target_pct = min(action_size, risk_limited_pct)
+    else:
+        target_pct = action_size
+
+    target_pct = round(target_pct, 4)
+    total_cash = cash * target_pct
+
+    # Cash-aware cap
+    cash_constrained = False
+    cash_usage_pct = None
+    if cash_available is not None and cash_available > 0:
+        cash_cap = cash_available * max_single_trade_cash_pct
+        if total_cash > cash_cap:
+            total_cash = cash_cap
+            cash_constrained = True
+        cash_usage_pct = round(total_cash / cash_available * 100, 1)
+    elif cash_available is not None and cash_available <= 0:
+        total_cash = 0
+        cash_constrained = True
+        cash_usage_pct = 0
+
+    total_shares = _shares(total_cash, price)
+
+    # Entry batches
+    batches = config.get("entry_batches", DEFAULT_CONFIG["entry_batches"])
+    total_weight = sum(b["weight_pct"] for b in batches)
+    high_4w = row.get("high_4w") or price * 1.05
+    entry_plan = []
+
+    if total_shares < 3:
+        # high-priced stock: single batch
+        entry_plan.append({
+            "step": 1, "trigger": "立即买入（高价股一次性建仓）",
+            "weight_pct": round(target_pct * 100, 2),
+            "price": price, "shares": max(1, total_shares),
+            "cash": round(total_cash, 2), "single_batch": True,
+        })
+    else:
+        for b in batches:
+            frac = b["weight_pct"] / total_weight
+            batch_cash = total_cash * frac
+            if b["step"] == 1:
+                batch_price = price
+                trigger = b["trigger"]
+            elif b["step"] == 2:
+                batch_price = round(price * 1.03, 2)
+                trigger = "涨至 $" + str(batch_price) + " (+3%) 且未跌破 SMA10"
+            else:
+                batch_price = round(max(high_4w, price * 1.06), 2)
+                trigger = "突破 $" + str(batch_price) + " (4W 高 或 +6%)"
+            shares = _shares(batch_cash, batch_price)
+            if shares == 0 and batch_cash >= batch_price * 0.5:
+                shares = 1
+            entry_plan.append({
+                "step": b["step"], "trigger": trigger,
+                "weight_pct": round(frac * target_pct * 100, 2),
+                "price": batch_price, "shares": shares,
+                "cash": round(batch_cash, 2),
+            })
+
+    # Stop ladder
+    initial_stop = round(price * 0.92, 2)
+    stop_ladder = []
+    for s in config.get("stop_ladder", DEFAULT_CONFIG["stop_ladder"]):
+        gain = s["after_gain_pct"] / 100
+        trigger_price = round(price * (1 + gain), 2)
+        if s["stop_logic"] == "minus_8_pct":
+            stop_price = initial_stop
+        elif s["stop_logic"] == "breakeven":
+            stop_price = round(price, 2)
+        elif s["stop_logic"] == "hwm_x_0.85":
+            stop_price = round(trigger_price * 0.85, 2)
+        elif s["stop_logic"] == "hwm_x_0.80":
+            stop_price = round(trigger_price * 0.80, 2)
+        else:
+            stop_price = None
+        stop_ladder.append({
+            "after_gain_pct": s["after_gain_pct"],
+            "trigger_price": trigger_price,
+            "stop_price": stop_price,
+            "desc": s["desc"],
+        })
+
+    profit_taking = []  # 反马丁: 始终为空
+    exit_triggers = config.get("exit_triggers", DEFAULT_CONFIG["exit_triggers"])
+    risk_cash = total_shares * stop_distance
+    risk_pct_of_portfolio = round(risk_cash / cash * 100, 2) if cash else 0
+
+    # Summary
+    if cash_constrained and cash_available is not None and cash_available <= 0:
+        summary = "⚠️ 现金已耗尽 ($0 可用), 当前不建议新开仓"
+    elif cash_constrained:
+        summary = (f"⚠️ 现金受限: 推荐 ${round(total_cash,0):.0f} ({total_shares}股), "
+                   f"占现金 {cash_usage_pct:.0f}% (上限 {int(max_single_trade_cash_pct*100)}%)")
+    else:
+        summary = f"目标仓位 {round(target_pct*100,1)}% (${round(total_cash,0):.0f}/{total_shares} 股), 分 {len(batches)} 批"
+        if cash_usage_pct is not None:
+            summary += f", 占现金 {cash_usage_pct:.0f}%"
+
+    return {
+        "summary": summary,
+        "config_snapshot": {
+            "portfolio_cash_usd": cash,
+            "risk_per_trade_pct": config.get("risk_per_trade_pct", 1.5),
+            "cash_available_usd": cash_available,
+        },
+        "target_position_pct": round(target_pct * 100, 2),
+        "target_cash_usd": round(total_cash, 2),
+        "target_shares": total_shares,
+        "cash_constrained": cash_constrained,
+        "cash_usage_pct": cash_usage_pct,
+        "initial_stop_price": initial_stop,
+        "stop_distance_atr": 1.5,
+        "single_trade_risk_usd": round(risk_cash, 2),
+        "single_trade_risk_pct": risk_pct_of_portfolio,
+        "entry_plan": entry_plan,
+        "stop_ladder": stop_ladder,
+        "profit_taking": profit_taking,
+        "exit_triggers": exit_triggers,
+    }
+
+
+def annotate_rows(rows, config):
+    """Attach playbook dict to each row in-place."""
+    for r in rows:
+        try:
+            r["playbook"] = build_playbook(r, config)
+        except Exception as e:
+            r["playbook"] = None
+            r["playbook_error"] = str(e)
+    return rows

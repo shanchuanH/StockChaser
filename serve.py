@@ -55,7 +55,7 @@ SEED_ALWAYS_REFRESH = {
 # user-edited fields like shares/buy_price/buy_date/batches).
 # Used by SEED_MERGE_NEW_KEYS handler to handle "promote ETF to AI chain"
 # (= remove category) and similar metadata flips.
-SEED_RECONCILE_FIELDS = {"category", "name"}
+SEED_RECONCILE_FIELDS = {"category", "name", "strategy", "high_conviction"}
 
 # Files that should MERGE new entries from seed but never overwrite
 # existing user-edited entries on disk.
@@ -131,7 +131,7 @@ def _merge_dict_new_keys(seed_path, disk_path):
     Two operations on every cold start:
       (a) Add keys from seed that don't exist on disk (e.g. new positions).
       (b) For keys that DO exist, sync only the fields listed in
-          SEED_RECONCILE_FIELDS ({category, name}) — so a "promote ETF to
+          SEED_RECONCILE_FIELDS ({category, name, strategy, high_conviction}) — so a "promote ETF to
           AI chain" change in git (= seed removes category) actually
           propagates to the persistent disk.
 
@@ -271,53 +271,46 @@ def in_market_hours(now_utc):
 
 
 def run_pipeline(use_mock=False):
+    """v3.7 refactored: fetch_data (subprocess) → engine.run_pipeline (in-process).
+
+    Engine handles scoring + stops + alerts in one call (no more separate subprocesses).
+    """
     fetch_script = "fetch_mock.py" if use_mock else "fetch_data.py"
-    steps = [SCRIPTS / fetch_script, SCRIPTS / "engine_v35.py"]
-    for s in steps:
-        try:
-            r = subprocess.run(
-                [sys.executable, str(s)],
-                capture_output=True, text=True, timeout=300,
-            )
-            if r.returncode != 0:
-                return False, s.name + " failed: " + r.stderr[:400]
-        except Exception as exc:
-            return False, s.name + " error: " + str(exc)
-
-    # Run alert detector — non-fatal if it errors out
     try:
         r = subprocess.run(
-            [sys.executable, str(SCRIPTS / "alerts.py")],
-            capture_output=True, text=True, timeout=60,
+            [sys.executable, str(SCRIPTS / fetch_script)],
+            capture_output=True, text=True, timeout=300,
         )
         if r.returncode != 0:
-            print("alerts.py warning: " + r.stderr[:200])
+            return False, fetch_script + " failed: " + r.stderr[:400]
     except Exception as exc:
-        print("alerts.py error: " + str(exc))
+        return False, fetch_script + " error: " + str(exc)
 
-    # Dynamic stop-loss ratchet — monotonic upward as浮盈 hits +10/+20/+30 milestones
+    # Engine pipeline (in-process): score → tag → priority → stops → alerts
     try:
-        r = subprocess.run(
-            [sys.executable, str(SCRIPTS / "dynamic_stops.py")],
-            capture_output=True, text=True, timeout=30,
-        )
-        if r.returncode != 0:
-            print("dynamic_stops.py warning: " + r.stderr[:200])
+        # Ensure engine package on path
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        # Always re-import to pick up code changes on dev reload
+        from importlib import reload
+        import engine.pipeline as _pipeline
+        reload(_pipeline)
+        _pipeline.run(verbose=False)
     except Exception as exc:
-        print("dynamic_stops.py error: " + str(exc))
+        return False, "engine pipeline error: " + str(exc)
 
-    # __PATCH_RUN_ADVISOR__
+    # Optional: entry advisor (best-effort)
     try:
         r = subprocess.run(
             [sys.executable, str(SCRIPTS / "missed_entry_advisor.py")],
             capture_output=True, text=True, timeout=30,
         )
         if r.returncode != 0:
-            print("missed_entry_advisor.py warning: " + r.stderr[:200])
+            print("missed_entry_advisor warning: " + r.stderr[:200])
     except Exception as exc:
-        print("missed_entry_advisor.py error: " + str(exc))
+        print("missed_entry_advisor error: " + str(exc))
 
-    # Best-effort: push priority change to Telegram. Never fail the pipeline.
+    # Telegram (best-effort)
     try:
         subprocess.run(
             [sys.executable, str(SCRIPTS / "notify_telegram.py")],
@@ -624,28 +617,36 @@ def api_conviction_history():
 
 
 # ===== Pending alerts (persistent trigger events) =====
+def _engine_paths():
+    """Lazy import + return engine.Paths object scoped to this repo."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from engine import Paths
+    return Paths(ROOT)
+
+
 @app.route("/api/alerts", methods=["GET"])
 def api_alerts():
     """Return active (un-dismissed, un-snoozed) alerts."""
     try:
-        from alerts import active_alerts
-        return jsonify({"alerts": active_alerts()})
+        from engine import active_alerts
+        paths = _engine_paths()
+        return jsonify({"alerts": active_alerts(paths.signals, paths.holdings, paths.pending)})
     except Exception as exc:
         return jsonify({"error": str(exc), "alerts": []}), 500
 
 
 @app.route("/api/alerts/dismiss", methods=["POST"])
 def api_alerts_dismiss():
-    """Dismiss or snooze a specific alert.
-    body: {ticker, id, snooze_hours?}
-    """
+    """Dismiss or snooze a specific alert. body: {ticker, id, snooze_hours?}"""
     body = request.get_json(force=True, silent=True) or {}
     ticker = (body.get("ticker") or "").upper()
     alert_id = body.get("id")
     snooze_hours = body.get("snooze_hours")
     try:
-        from alerts import dismiss
-        ok = dismiss(ticker, alert_id, snooze_hours)
+        from engine import dismiss_alert
+        paths = _engine_paths()
+        ok = dismiss_alert(ticker, alert_id, snooze_hours, paths.pending)
         return jsonify({"ok": bool(ok)})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -655,9 +656,11 @@ def api_alerts_dismiss():
 def api_alerts_scan():
     """Manually trigger alert detection (e.g. from dashboard button)."""
     try:
-        from alerts import detect_and_persist, active_alerts
-        n_new = detect_and_persist()
-        return jsonify({"ok": True, "new": n_new, "active": active_alerts()})
+        from engine import detect_and_persist, active_alerts
+        paths = _engine_paths()
+        n_new = detect_and_persist(paths.signals, paths.holdings, paths.pending)
+        return jsonify({"ok": True, "new": n_new,
+                       "active": active_alerts(paths.signals, paths.holdings, paths.pending)})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
