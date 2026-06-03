@@ -38,6 +38,7 @@ class Paths:
         self.history_csv = self.data / "history.csv"
         self.conv_hist = self.data / "conviction_history.json"
         self.volume_profile = self.data / "volume_profile.json"
+        self.priority_history = self.data / "priority_history.json"
 
 
 def _load_prior_priority(signals_path):
@@ -142,10 +143,22 @@ def run(paths=None, *, run_stops=True, run_alerts=True, run_volume_profile=True,
     for i, r in enumerate(rows, start=1):
         r["rank"] = i
 
-    # 2) Per-layer cap + priority ranking with hysteresis
+    # 2) Per-layer cap + priority ranking with hysteresis + min-tenure
     rows = action_mod.apply_per_layer_cap(rows)
     prev_priority = _load_prior_priority(paths.signals)
-    rows = action_mod.apply_priority_rank(rows, prev_priority)
+    # Load priority_history (per-ticker entry date for min-tenure lock)
+    try:
+        priority_history = json.loads(paths.priority_history.read_text(encoding="utf-8")) \
+                           if paths.priority_history.exists() else {}
+    except Exception:
+        priority_history = {}
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    rows = action_mod.apply_priority_rank(rows, prev_priority,
+                                          priority_history=priority_history,
+                                          today_str=today_str)
+    # Persist updated priority_history
+    paths.priority_history.write_text(
+        json.dumps(priority_history, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # 3) Cash-aware playbook
     pb_config = playbook.load_config(paths.portfolio)

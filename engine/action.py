@@ -16,8 +16,11 @@ from __future__ import annotations
 
 MAX_STRONG_BUY_PER_LAYER = 2
 PRIORITY_TOP_N = 8
-PRIORITY_EXIT_CONV = 60
-STICKY_MOM_BONUS = 2.0  # priority hysteresis: +2pp/月 to keep ranking stable
+PRIORITY_SOFT_TOP_N = 12        # 软退出窗口: 老 priority 在 top 12 就保留
+PRIORITY_EXIT_CONV = 60          # 老 priority 跌破此 conv 即放出去
+PRIORITY_MIN_TENURE_DAYS = 7     # 入 priority 后最短任期 (除非 conv 暴跌)
+PRIORITY_HARD_EXIT_CONV = 45     # 跌破此值无视最短任期立即退出
+STICKY_MOM_BONUS = 5.0           # priority hysteresis: +5pp/月 (v3.7 加大稳定性)
 
 ACTION_META = {
     "STRONG_BUY":  {"emoji": "\U0001f525", "label": "强力买入", "color": "#d63031", "size_class": "重仓", "size_pct": 10.0},
@@ -101,14 +104,27 @@ def apply_per_layer_cap(rows):
     return rows
 
 
-def apply_priority_rank(rows, prev_priority_set=None):
-    """v3.6: Priority pool = BUY+, sort by 6M-Mom DESC, sticky 2pp bonus.
+def apply_priority_rank(rows, prev_priority_set=None, priority_history=None, today_str=None):
+    """v3.7: Priority 稳定性增强.
 
-    - Sticky tickers (in prev priority + still BUY+ + Conv >= 60) get +2pp/月 mom bonus
-    - Fresh BUY+ tickers compete on raw 6M-Mom
-    - Top N = 8 marked as is_priority
+    规则 (优先级从高到低):
+      1. **Hard exit**  conv < 45 → 立即出 priority (无视任期)
+      2. **Min tenure** 入 priority 不到 7 天 + conv >= 45 → 强制保留
+      3. **Soft exit**  老 priority 在 top 12 内 → 保留 (sticky 5pp mom 加成)
+      4. **Fresh entry** Top 8 (按 mom DESC 排序) → 新进 priority
+
+    Args:
+        rows: 已 score 的 ticker 行
+        prev_priority_set: 上次 is_priority=True 的 ticker 集合
+        priority_history: {ticker: {first_entry_date: 'YYYY-MM-DD'}} 用于算任期
+                          (run() 负责 load/save 这个字典)
+        today_str: 今天日期字符串, 用于计算 days_in_priority
     """
+    from datetime import datetime, timezone
+
     prev_priority_set = prev_priority_set or set()
+    priority_history = priority_history if priority_history is not None else {}
+    today_str = today_str or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     def _mom_key(r, is_sticky):
         mom = r.get("avg_monthly_6m_pct") or 0
@@ -116,33 +132,79 @@ def apply_priority_rank(rows, prev_priority_set=None):
             mom += STICKY_MOM_BONUS
         return (-mom, -r.get("conviction_score", 0))
 
+    def _days_in_priority(ticker):
+        rec = priority_history.get(ticker)
+        if not rec or not rec.get("first_entry_date"):
+            return 0
+        try:
+            first = datetime.strptime(rec["first_entry_date"], "%Y-%m-%d")
+            today = datetime.strptime(today_str, "%Y-%m-%d")
+            return max(0, (today - first).days)
+        except ValueError:
+            return 0
+
+    # Step 1: 池子 = 所有 BUY+ + 老 priority 仍能保留的
     eligible = []
     seen = set()
-    # 1) prior priority that still qualifies (sticky)
     for r in rows:
-        if (r["ticker"] in prev_priority_set
-                and r["action"] in ("STRONG_BUY", "BUY")
-                and r["conviction_score"] >= PRIORITY_EXIT_CONV):
-            eligible.append((r, True))
-            seen.add(r["ticker"])
-    # 2) fresh BUY+ candidates
+        is_old = r["ticker"] in prev_priority_set
+        conv = r["conviction_score"]
+        if is_old and r["action"] in ("STRONG_BUY", "BUY"):
+            if conv >= PRIORITY_HARD_EXIT_CONV:
+                eligible.append((r, True))
+                seen.add(r["ticker"])
+                continue
+        if is_old and conv < PRIORITY_HARD_EXIT_CONV:
+            continue
     for r in rows:
         if r["action"] in ("STRONG_BUY", "BUY") and r["ticker"] not in seen:
             eligible.append((r, False))
             seen.add(r["ticker"])
     eligible.sort(key=lambda x: _mom_key(x[0], x[1]))
 
+    # Step 2: 决定 is_priority
+    locked_in_priority = set()
+    for r in rows:
+        if r["ticker"] in prev_priority_set:
+            days = _days_in_priority(r["ticker"])
+            if days < PRIORITY_MIN_TENURE_DAYS and r["conviction_score"] >= PRIORITY_HARD_EXIT_CONV:
+                locked_in_priority.add(r["ticker"])
+
+    is_priority_set = set(locked_in_priority)
+
     for i, (r, was_priority) in enumerate(eligible, start=1):
         r["priority_rank"] = i
-        r["is_priority"] = i <= PRIORITY_TOP_N
-        r["priority_sticky"] = was_priority
+        if was_priority and i <= PRIORITY_SOFT_TOP_N:
+            is_priority_set.add(r["ticker"])
+        elif i <= PRIORITY_TOP_N:
+            is_priority_set.add(r["ticker"])
 
-    # 给剩下的 STRONG_BUY 也分配 rank (用于 dashboard 展示)
+    for r in rows:
+        if r.get("priority_rank") is None:
+            continue
+        is_pri = r["ticker"] in is_priority_set
+        r["is_priority"] = is_pri
+        r["priority_sticky"] = r["ticker"] in prev_priority_set
+        days = _days_in_priority(r["ticker"])
+        r["days_in_priority"] = days
+        r["priority_min_tenure_lock"] = (r["ticker"] in locked_in_priority)
+
+    for r in rows:
+        if r.get("is_priority"):
+            if r["ticker"] not in priority_history:
+                priority_history[r["ticker"]] = {"first_entry_date": today_str}
+            elif not priority_history[r["ticker"]].get("first_entry_date"):
+                priority_history[r["ticker"]]["first_entry_date"] = today_str
+        else:
+            priority_history.pop(r["ticker"], None)
+
     rank = len(eligible) + 1
     for r in rows:
         if r.get("priority_rank") is None and r["action"] == "STRONG_BUY":
             r["priority_rank"] = rank
             r["is_priority"] = False
             r["priority_sticky"] = False
+            r["days_in_priority"] = 0
+            r["priority_min_tenure_lock"] = False
             rank += 1
     return rows
